@@ -18,10 +18,14 @@ While coding:
 - Python: type hints everywhere, small pure functions. `app/domain/` imports nothing from FastAPI, SQLAlchemy or `app.repository`.
 - Timezone conversion only in Python (`zoneinfo`), never in SQL. All SQL must run on both Postgres and SQLite.
 - Never edit `data/seed.sql`, never modify raw table data, never hand-run DDL (migrations only).
+- **Error paths are tested for real.** Every error response the plan specifies (503, 404, 422, …) gets a test that causes the real failure: an unreachable DB (e.g. a SQLite file in a nonexistent directory), a missing row, bad input. A mocked function that raises is not enough on its own: in Task 1, `/health` gave 500 instead of 503 because the connection failed in the dependency, outside the handler's `try`.
+- **Comments explain why.** Config files (`pyproject.toml`, `alembic.ini`, Dockerfile, compose, entrypoint scripts) and non-obvious code get short comments that explain *why*, citing the PLAN.md section when a value comes from the plan. Don't restate the code. Uncommented config reads as cryptic to the reviewers of this repo.
+- **Logic modules get a diagram.** A module with branching logic (e.g. `app/domain/*`) gets a module docstring with an ASCII flow diagram of the decision and one worked example taken from a **single** PLAN.md section 4 scenario (not merged from several), using the real constant names. See `app/domain/detection.py` and `app/domain/ranking.py`.
 
 Before handing off each branch:
 - Run the task's **Quickstart** exactly as written; every command must pass. Paste the trimmed output in the PR.
 - Check the line count (< 700).
+- Check the pytest warnings summary. List every warning your change introduced, and any still open, under "Follow-ups" in the PR. Fix a warning if the fix is trivial and inside the task's scope.
 - Commit locally (`<type>(<area>): <summary>`). **Never push, never use `gh`, never call GitHub MCP tools**: the human opens the PR from the host.
 - Write the handoff files exactly as in PLAN.md section 1 "Handoff files": `.pr/<id>/pr-body.md` (Goal · Changes · Tests added · Quickstart output · Line count · Decisions taken · Deviations · Follow-ups) and `.pr/<id>/create-pr.sh` from the template (`chmod +x`; `BASE` = `main`, or the previous branch for a stacked PR). Don't write `review.md`; that's the reviewer's file.
 
