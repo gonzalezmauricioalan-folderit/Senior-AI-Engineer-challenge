@@ -1,11 +1,27 @@
+# Tool configuration for the backend (no packaging metadata: the app runs from source).
+# Dependencies are pinned in requirements.txt / requirements-dev.txt, not here.
+
+# --- Ruff: linter + formatter -------------------------------------------------
+# Lint:   .venv/bin/ruff check .
+# Format: .venv/bin/ruff format .   (CI-style check: ruff format --check .)
 [tool.ruff]
-line-length = 110
-target-version = "py313"
-extend-exclude = [".venv"]
+line-length = 110          # PLAN.md 3.2: wider than the 88 default, fits SQL strings and test tables
+target-version = "py313"   # matches the python:3.13 runtime, so ruff allows 3.13 syntax
+extend-exclude = [".venv"] # never lint/format the virtualenv
 
 [tool.ruff.lint]
+# Rule sets kept deliberately small (the plan doesn't name any):
+#   E = pycodestyle errors (style problems)
+#   F = pyflakes (unused imports/variables, undefined names: real bugs)
+#   I = isort (import ordering, auto-fixable with `ruff check --fix`)
 select = ["E", "F", "I"]
 
+# --- Pytest -------------------------------------------------------------------
+# All tests:   .venv/bin/pytest -q
+# Fast loop:   .venv/bin/pytest -q -m "not slow"
+# One test:    .venv/bin/pytest -q tests/integration/test_health.py::test_health_ok
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests"]  # only collect from tests/, so a bare `pytest` doesn't wander into .venv or migrations
+# Custom markers must be declared, or pytest warns. `slow` = tests that load the real
+# seed (data/seed.sql, ~12.6k rows) into SQLite; everything else uses small fake data.
 markers = ["slow: tests that load the full seed (deselect with -m 'not slow')"]
