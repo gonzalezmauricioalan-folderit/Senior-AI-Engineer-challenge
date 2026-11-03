@@ -1,4 +1,32 @@
-"""Order locations so the ones needing attention come first (PLAN.md section 2: Ranking of locations)."""
+"""Order locations so the ones needing attention come first (PLAN.md section 2: Ranking of locations).
+
+How rank_locations() orders them, as three groups that are never mixed:
+
+    input (any order)
+          │
+          ├── status LOWER ───────────────▶ 1. NEEDS ATTENTION   sort: pct ascending (biggest drop
+          │                                                       first), ties by name
+          ├── status HIGHER or NORMAL ────▶ 2. FINE              sort: by name only (higher is not
+          │                                                       a problem, so no status priority)
+          └── status NOT_ENOUGH ──────────▶ 3. NO VERDICT YET    sort: by name
+          │
+          ▼
+    output = group 1 + group 2 + group 3
+
+Example (scenario S4: four locations, each with a usual of ~20).
+
+    input                                   output
+    ─────────────────────────────           ─────────────────────────────────────────
+    North   20 vs ~20   NORMAL               1. East    4 vs ~20  −80%  LOWER    ┐ needs
+    South    8 vs ~20   LOWER  −60%          2. South   8 vs ~20  −60%  LOWER    ┘ attention
+    East     4 vs ~20   LOWER  −80%          3. North  20 vs ~20   0%   NORMAL   ┐ fine, A→Z
+    West    35 vs ~20   HIGHER +75%          4. West   35 vs ~20  +75%  HIGHER   ┘
+
+    Ties: two LOWER locations at −50% keep name order ("Site B" before "Site D").
+
+Note: the account total (67 vs ~80, lower bound 57.6) is within its band, so the summary says NORMAL
+even though two locations dropped. The ranking is what surfaces them.
+"""
 
 from collections.abc import Sequence
 
