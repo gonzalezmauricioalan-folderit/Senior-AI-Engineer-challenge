@@ -8,6 +8,7 @@ Revision ID: 0001_initial_schema
 Revises:
 Create Date: 2026-11-03
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -32,8 +33,15 @@ def upgrade() -> None:
         "activity_events",
         sa.Column("id", sa.Integer, primary_key=True, autoincrement=False),
         sa.Column("account_id", sa.Integer, sa.ForeignKey("accounts.id"), nullable=False),
-        sa.Column("location", sa.String(80), nullable=False, comment="Site/branch; unique only within an account"),
-        sa.Column("event_type", sa.String(40), nullable=False, comment="call_received | lead_created | appointment_set"),
+        sa.Column(
+            "location", sa.String(80), nullable=False, comment="Site/branch; unique only within an account"
+        ),
+        sa.Column(
+            "event_type",
+            sa.String(40),
+            nullable=False,
+            comment="call_received | lead_created | appointment_set",
+        ),
         sa.Column("occurred_at", sa.DateTime(timezone=False), nullable=False, comment="UTC"),
         sa.Column("duration_seconds", sa.Integer, nullable=True, comment="Calls only; may be NULL"),
         sa.Column("outcome", sa.String(40), nullable=True, comment="May be NULL"),

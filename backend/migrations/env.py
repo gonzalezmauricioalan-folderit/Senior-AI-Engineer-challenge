@@ -1,4 +1,5 @@
 """Alembic environment. DB URL comes from $DATABASE_URL (defaults to the docker-compose db)."""
+
 import os
 from logging.config import fileConfig
 
