@@ -60,3 +60,24 @@ def test_weekday_usuals():
     assert len(usuals) == 7
     assert usuals[0] == 3.0 and usuals[6] == 0.0 and usuals[2] == 0.0
     assert weekday_usuals([], daily) == [None] * 7
+
+
+def test_mad_sets_the_spread_when_larger_than_sqrt_usual():
+    # median 110; every |x-110| = 10 -> MAD 10 -> 1.4826*10 = 14.826 > sqrt(110) = 10.49
+    ev = evaluate(110, [100] * 4 + [120] * 4)
+    assert ev.usual == 110.0
+    assert ev.lower == pytest.approx(110 - 2.5 * 14.826)  # 72.935
+    assert ev.upper == pytest.approx(110 + 2.5 * 14.826)  # 147.065
+
+
+@pytest.mark.parametrize(("usual", "low_volume"), [(5, True), (6, True), (7, False)])
+def test_low_volume_boundary(usual: int, low_volume: bool):
+    assert evaluate(usual, [usual] * 8).low_volume is low_volume
+
+
+@pytest.mark.parametrize(("value", "status"), [(240, Status.HIGHER), (160, Status.LOWER)])
+def test_pct_exactly_at_min_pct_is_flagged(value: int, status: Status):
+    # usual 200, band 164.6..235.4: +-20% is outside the band, |diff| = 40 >= 3, so only the pct guard decides
+    ev = evaluate(value, [200] * 8)
+    assert abs(ev.pct_vs_usual) == pytest.approx(0.20)
+    assert ev.status is status

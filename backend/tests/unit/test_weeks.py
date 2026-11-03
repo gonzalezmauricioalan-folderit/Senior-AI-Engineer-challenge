@@ -1,6 +1,7 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from app.domain.detection import N_WEEKS
 from app.domain.weeks import (
     first_complete_week,
     history,
@@ -56,3 +57,14 @@ def test_series_start_and_history_zero_fill():
     assert len(h) == 8
     assert h[0][0] == date(2026, 5, 25)
     assert h[-1][0] == date(2026, 7, 13)
+
+
+def test_series_start_includes_first_week_itself():
+    assert series_start({date(2026, 2, 2): 1}, date(2026, 2, 2)) == date(2026, 2, 2)
+
+
+def test_history_is_capped_at_n_weeks():
+    week = date(2026, 7, 20)
+    counts = {week - timedelta(days=7 * i): i for i in range(1, 13)}  # 12 weeks of data, count = distance
+    h = history(counts, week - timedelta(days=7 * 12), week, N_WEEKS)
+    assert [n for _, n in h] == [8, 7, 6, 5, 4, 3, 2, 1]  # oldest kept is 8 weeks back, W itself absent
