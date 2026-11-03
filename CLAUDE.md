@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## IMPORTANT
 
-You are running inside a docker sandbox. You have access to some MCP (eg Github, Jira.) But There is no need to use in this session
+You are running inside a docker sandbox. Use the existing GitHub MCP (through the MCP gateway) for every GitHub interaction (PRs, reviews, comments), not the `gh` CLI. Jira MCP: not needed.
+
+The implementation plan is `PLAN.md` (frozen once Task 1 starts; changes go to `PLAN_CHANGES.md`). The decision log is `PLAN_first_iteration.md`.
 
 ## What this repo is
 
@@ -59,10 +61,10 @@ Rules from the starter README:
 
 ## Known data quirks (from profiling the seed; re-verify before relying on them)
 
-- Events run 2026-02-01 → 2026-07-27, about 26 weeks. The last week may be partial.
+- Events run 2026-02-01 → 2026-07-27: 25 complete local weeks (2026-02-02 … 2026-07-20); the first and last weeks have one day each.
 - Account 20 (Quiet Harbor Spa) has **no events at all**, so the baseline has to handle an empty history.
 - Accounts range from 1 location to 15. Location names follow the pattern `Site A`…`Site O` and are unique only *within* an account.
-- Account 6 (Metro Collision Centers, 15 sites) has a large spike across many sites starting around 2026-06-03, so a naive mean baseline would be skewed by it.
+- Account 6 (Metro Collision Centers, 15 sites) has a one-day spike on Wed 2026-06-03 (805 events across all 15 sites vs ~13 on a normal day), so a naive mean baseline would be skewed by it. Account 15 is +94% the same week.
 - About 12 groups of exact duplicate events have the same account, location, type and timestamp but different `id`s.
 - `outcome` is NULL on about 400 rows across all types. `duration_seconds` applies only to calls (20–1500s) and is NULL on about 313 calls.
 - Account timezones include `America/Phoenix`, which has no DST, and plain `UTC`.
