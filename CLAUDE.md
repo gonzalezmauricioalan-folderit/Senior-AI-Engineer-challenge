@@ -21,7 +21,18 @@ A take-home exercise for "Relay", a fictional B2B SaaS that tracks inbound custo
 - **DB:** Postgres 16.4 in Docker Compose (`docker-compose.yml`, service `db`). Credentials come from env vars (`.env.example`), defaulting to `relay`/`relay`/`relay`.
 - **Migrations:** Alembic in `backend/` (`backend/migrations/versions/`). The schema lives only in migrations. Never hand-run DDL.
 - **Backend:** FastAPI (planned) in `backend/`, Python venv at `backend/.venv`, deps pinned in `backend/requirements.txt`.
-- No app code, lint or test tooling yet. Add those commands here once they exist, including how to run a single test.
+- Dev deps (pytest, httpx, ruff) are in `backend/requirements-dev.txt`. Ruff and pytest config live in `backend/pyproject.toml`.
+
+## Backend commands (run from `backend/`)
+
+```bash
+uv pip install --python .venv/bin/python -r requirements-dev.txt
+.venv/bin/uvicorn app.main:app --reload --port 8000     # run (needs the db up; GET /health)
+.venv/bin/ruff check . && .venv/bin/ruff format --check .   # lint
+.venv/bin/pytest -q                                     # all tests (SQLite, no docker needed)
+.venv/bin/pytest -q -m "not slow"                       # fast tests only (skips the full-seed ones)
+.venv/bin/pytest -q tests/integration/test_health.py::test_health_ok   # a single test
+```
 
 ## Local database
 
