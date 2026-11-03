@@ -46,12 +46,20 @@ def test_accounts_location_count_ignores_duplicate_rows(client: TestClient, conn
 def test_latest_complete_week_from_data_when_as_of_unset(
     engine: Engine, conn: Connection, db_url: str
 ) -> None:
-    add_account(conn, 101, tz="Asia/Tokyo")
-    # Local Tuesday 2026-07-28 -> latest complete week is the one starting Monday 2026-07-20.
-    add_event(conn, 101, "Site A", datetime(2026, 7, 28, 5, 0), "Asia/Tokyo")
+    add_account(conn, 101, name="Chicago Co", tz="America/Chicago")
+    add_account(conn, 102, name="Tokyo Co", tz="Asia/Tokyo")
+    # Earlier event: using the dataset min instead of the max would give a different week.
+    add_event(conn, 101, "Site A", datetime(2026, 5, 6, 10, 0), "America/Chicago")
+    # Dataset max: Sun 2026-07-26 23:30 Chicago = Mon 2026-07-27 04:30 UTC = Mon 13:30 Tokyo.
+    add_event(conn, 101, "Site A", datetime(2026, 7, 26, 23, 30), "America/Chicago")
     settings = Settings(database_url=db_url, as_of_date=None, cors_origins=[])
     with TestClient(create_app(settings)) as c:
-        assert c.get("/accounts").json()[0]["latest_complete_week"] == "2026-07-20"
+        latest = {a["name"]: a["latest_complete_week"] for a in c.get("/accounts").json()}
+    # Chicago local date is Sun 07-26 -> Monday 07-20 -> latest complete week 07-13
+    # (the UTC date would give 07-20).
+    assert latest["Chicago Co"] == "2026-07-13"
+    # Tokyo is already on Mon 07-27 -> latest complete week 07-20: the rule is per account timezone.
+    assert latest["Tokyo Co"] == "2026-07-20"
 
 
 def test_latest_complete_week_is_null_for_empty_dataset_without_as_of(
