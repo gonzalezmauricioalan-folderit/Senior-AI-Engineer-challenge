@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## IMPORTANT
 
-You are running inside a docker sandbox. Use the existing GitHub MCP (through the MCP gateway) for every GitHub interaction (PRs, reviews, comments), not the `gh` CLI. Jira MCP: not needed.
+You are running inside a docker sandbox. The sandbox can't push to GitHub. **Agents work on local branches only (one new branch per task): never `git push`, `gh` or GitHub MCP writes.** The builder writes `.pr/<id>/pr-body.md` and `.pr/<id>/create-pr.sh`, the reviewer writes `.pr/<id>/review.md`, and the human runs `.pr/<id>/create-pr.sh` on the host to push and open the PR (see PLAN.md section 1). The read-only MCP (`github-readonly`) may be used to check PR state. Repo: `gonzalezmauricioalan-folderit/Senior-AI-Engineer-chllange`. Jira MCP: not needed.
 
 The implementation plan is `PLAN.md` (frozen once Task 1 starts; changes go to `PLAN_CHANGES.md`). The decision log is `PLAN_first_iteration.md`.
 
