@@ -28,3 +28,6 @@ venv/
 
 # Starter project (kept local, not tracked)
 relay-analytics-starter/
+
+# PR handoff files (run on the host)
+.pr/

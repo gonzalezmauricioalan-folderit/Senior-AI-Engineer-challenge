@@ -51,11 +51,35 @@ Roles:
 - **Builders:** `api-builder`, `frontend-builder`. **Reviewers:** `api-reviewer`, `frontend-reviewer`.
 - **Human:** reviews and merges every PR on GitHub.
 
-Per task, strictly sequential:
-1. Builder: branch `task/<id>-<slug>` from an up-to-date `main` → implement the task's **Scope** → write its **Tests** → run its **Quickstart** → open the PR.
-2. Reviewer: checks the PR against this plan, re-runs the Quickstart, posts a review comment. Blocking findings → the builder fixes them on the same branch → re-review.
-3. Human reviews and merges (or requests changes → step 1 on the same branch).
-4. Orchestrator offers agent improvements, then starts the next task.
+The sandbox can't push to GitHub, and agents never open PRs. **Agents work only on local branches; the human pushes and opens each PR from the host.**
+
+Per task, strictly sequential, **one new branch per task**:
+1. **Builder:** checks out `main` and creates `task/<id>-<slug>` → implements the task's **Scope** → writes its **Tests** → runs its **Quickstart** → commits locally → writes the handoff files (below). No push, no PR.
+2. **Reviewer:** works on the **same local branch** (`git checkout task/<id>-<slug>`). It checks the diff against this plan, re-runs the Quickstart and writes `.pr/<id>/review.md`. Blocking findings → the builder fixes them with new commits on the same branch → re-review, which overwrites `review.md`.
+3. **Human, on the host:** runs `.pr/<id>/create-pr.sh`. It pushes the branch, opens the PR with `pr-body.md`, and posts `review.md` as a PR comment. Then the human reviews and merges on GitHub, or requests changes (→ step 1 on the same branch, then re-run the script; the PR already exists, so it only pushes and comments).
+4. **Human, on the host, after merging:** `git checkout main && git pull`. The sandbox shares the working tree in direct mode, so it sees the updated `main`.
+5. **Orchestrator:** offers agent improvements, adds notes to `ai-log/notes.md`, then starts the next task.
+
+### Handoff files (`.pr/<id>/`, gitignored, inside the repo so the host can reach them)
+- `pr-body.md`: the PR description (written by the builder).
+- `review.md`: the review (written by the reviewer).
+- `create-pr.sh`: executable, written by the builder from this template (the base is `main`, or the previous branch for a stacked PR):
+  ```bash
+  #!/usr/bin/env bash
+  # Run on the HOST from the repo root: .pr/<id>/create-pr.sh
+  set -euo pipefail
+  BRANCH="task/<id>-<slug>"; BASE="main"; TITLE="<type>(<area>): <summary> [Task <id>]"
+  DIR="$(cd "$(dirname "$0")" && pwd)"
+  git push -u origin "$BRANCH"
+  if command -v gh >/dev/null; then
+    gh pr view "$BRANCH" >/dev/null 2>&1 || gh pr create --head "$BRANCH" --base "$BASE" --title "$TITLE" --body-file "$DIR/pr-body.md"
+    [ -f "$DIR/review.md" ] && gh pr comment "$BRANCH" --body-file "$DIR/review.md"
+  else
+    echo "Open: https://github.com/gonzalezmauricioalan-folderit/Senior-AI-Engineer-chllange/compare/$BASE...$BRANCH?expand=1"
+    echo "Paste $DIR/pr-body.md as the description and $DIR/review.md as a comment."
+  fi
+  ```
+- The builder's final report prints the exact command to run: `.pr/<id>/create-pr.sh`.
 
 ### PR rules
 - **< 700 changed lines** (added + removed), excluding generated files and data:
@@ -63,9 +87,13 @@ Per task, strictly sequential:
   git diff --numstat main...HEAD -- . ':!**/package-lock.json' ':!data/seed.sql' ':!openapi.json' ':!frontend/src/api/schema.d.ts' \
     | awk '{s+=$1+$2} END {print s}'
   ```
-- **Stacked PRs** when a task doesn't fit: split along the task's Scope bullets into `task/<id>a-<slug>` (base `main`), `task/<id>b-<slug>` (base `task/<id>a-<slug>`), and so on. Each PR passes its own tests. The PR title says `[<id>a/2]`, and each description links the others. After the lower PR merges, retarget the next one: `gh pr edit <n> --base main`.
+- **Stacked PRs** when a task doesn't fit: split along the task's Scope bullets into `task/<id>a-<slug>` (base `main`), `task/<id>b-<slug>` (base `task/<id>a-<slug>`), and so on. Each PR passes its own tests. The PR title says `[<id>a/2]`, and each description links the others. Each part gets its own `.pr/<id>a/`, `.pr/<id>b/` handoff folder, with `BASE` set to the previous branch. After the lower PR merges, the human retargets the next one (`gh pr edit <branch> --base main` on the host, or the GitHub UI).
 - **PR description:** Goal · Changes · Tests added · Quickstart output (trimmed) · Line count · **Decisions taken** (anything this plan didn't specify) · Deviations · Follow-ups.
 - **Commit messages:** `<type>(<area>): <summary>` with type ∈ feat, fix, test, chore, docs; area ∈ api, web, db, infra, docs.
+
+### GitHub access
+- Agents never touch GitHub: no `git push`, no `gh`, no MCP writes. Everything GitHub-side goes through the human running `create-pr.sh` on the host.
+- The orchestrator may use the read-only MCP (`github-readonly`: `list_pull_requests`, `get_pull_request`) to check a PR's state after the human opens it.
 
 ### When something isn't specified
 - Pick the **simplest option consistent with this plan** and list it under "Decisions taken" in the PR.
@@ -361,7 +389,7 @@ Backend scenarios run through the API (`client`) on SQLite with fake accounts. A
 **Status:** the foundation is already committed directly on `main` (9 commits, before this plan was frozen), so there's no foundation PR; that's an exception to "every task ends in a PR".
 **Scope:**
 - Human: rename the GitHub repo to a name of your own (no `relay-analytics-starter`) and make it public before submission.
-- Orchestrator: update `origin`, push `main`, add the GitHub MCP servers, and replace the `gh` instructions in section 1 and `.claude/agents/*.md` with the MCP tools (also allowing those tools in the reviewers' `tools:`). This is the last edit to PLAN.md before it's frozen.
+- Orchestrator: update `origin`, and switch section 1 and `.claude/agents/*.md` to the local-branch + host handoff workflow. This goes through branch `task/0-workflow` with its own `.pr/0/create-pr.sh`, which also tests the handoff, and it's the last edit to PLAN.md before it's frozen.
 
 **Tests:** none (no app code).
 **Quickstart:**
