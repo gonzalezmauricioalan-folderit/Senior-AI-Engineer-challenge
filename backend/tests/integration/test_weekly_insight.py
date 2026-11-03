@@ -103,3 +103,57 @@ def test_duplicate_and_utc_notes(client: TestClient, conn: Connection) -> None:
     assert body["summary"]["total"] == 20
     assert body["data_notes"][0] == "1 duplicate event removed from this week."
     assert body["data_notes"][1].startswith("This account's timezone is set to UTC")
+
+
+def test_rounding_is_one_decimal_for_band_and_three_for_pct(client: TestClient, conn: Connection) -> None:
+    add_account(conn, 120)
+    add_weekly(conn, 120, "Main", TZ, {**weeks_before(WEEK, [20, 21, 22, 23, 24, 25, 26, 27]), WEEK: 30})
+    s = client.get("/accounts/120/weekly-insight").json()["summary"]
+    # usual 23.5, spread = sqrt(23.5) = 4.8477 -> band 11.3807..35.6193; pct = 6.5 / 23.5 = 0.27659
+    assert (s["usual"], s["lower"], s["upper"], s["pct_vs_usual"]) == (23.5, 11.4, 35.6, 0.277)
+
+
+def test_first_complete_week_itself_is_accepted(client: TestClient, conn: Connection) -> None:
+    _s2(conn)  # dataset min is Mon 2026-05-25, the first complete week
+    r = client.get("/accounts/102/weekly-insight", params={"week_start": "2026-05-25"})
+    assert r.status_code == 200
+    assert r.json()["summary"]["status"] == "not_enough_history"
+
+
+def test_duplicate_note_counts_by_local_date_of_the_selected_week(
+    client: TestClient, conn: Connection
+) -> None:
+    add_account(conn, 130)
+    add_weekly(conn, 130, "Main", TZ, {**weeks_before(WEEK, [20] * 8), WEEK: 20})
+    # Local Sun 23:30 is already Monday in UTC. Each time is inserted twice (1 duplicate each).
+    # Two pairs in the selected week and one in the previous week, so every mis-bucketing changes the count.
+    for local in (
+        datetime(2026, 7, 26, 23, 30),
+        datetime(2026, 7, 26, 23, 45),
+        datetime(2026, 7, 19, 23, 30),
+    ):
+        add_event(conn, 130, "Main", local, TZ)
+        add_event(conn, 130, "Main", local, TZ)
+    body = client.get("/accounts/130/weekly-insight").json()
+    # Only the two 07-26 pairs belong to week 07-20; the 07-19 pair is the previous week's.
+    assert body["data_notes"] == ["2 duplicate events removed from this week."]
+    assert body["days"][6]["total"] == 2
+
+
+def test_weekday_usuals_are_null_without_enough_history(client: TestClient, conn: Connection) -> None:
+    add_account(conn, 140)
+    add_weekly(conn, 140, "Main", TZ, {**weeks_before(WEEK, [20] * 3), WEEK: 20})
+    body = client.get("/accounts/140/weekly-insight").json()
+    assert body["summary"]["status"] == "not_enough_history"
+    assert [d["usual"] for d in body["days"]] == [None] * 7
+
+
+def test_first_complete_week_uses_the_accounts_local_date(client: TestClient, conn: Connection) -> None:
+    # Tokyo local Tue 2026-07-07 00:30 is Mon 07-06 15:30 UTC. The local date is a Tuesday -> first complete
+    # week 07-13; the UTC date (a Monday) would wrongly make 07-06 the first complete week.
+    add_account(conn, 150, tz="Asia/Tokyo")
+    add_event(conn, 150, "Main", datetime(2026, 7, 7, 0, 30), "Asia/Tokyo")
+    url = "/accounts/150/weekly-insight"
+    r = client.get(url, params={"week_start": "2026-07-06"})
+    assert r.json()["detail"] == "week_start is before the first complete week (2026-07-13)"
+    assert client.get(url, params={"week_start": "2026-07-13"}).status_code == 200
