@@ -2,6 +2,41 @@
 
 The pseudocode in PLAN.md is authoritative; constants live here. Values are returned unrounded:
 rounding is the service's job.
+
+How evaluate(value, history) decides:
+
+    fewer than MIN_HISTORY (4) history weeks? ── yes ──▶ NOT_ENOUGH (usual/band/pct = None)
+                     │ no
+                     ▼
+    usual  = median(history)                  a single spike week can't move it
+    MAD    = median(|week − usual|)           the "typical wobble"
+    spread = max(1.4826 · MAD, √usual)        never narrower than chance (Poisson noise)
+    band   = [max(0, usual − K·spread), usual + K·spread]       K = 2.5
+                     │
+                     ▼
+    flag only if ALL of:  a) value outside the band
+                          b) |value − usual| ≥ MIN_ABS (3)
+                          c) |pct| ≥ MIN_PCT (20%)   (if usual == 0: value > 0)
+                     │
+          flagged ───┴─── not flagged
+             ▼                 ▼
+    HIGHER if value > usual   NORMAL
+    else LOWER
+    (separately: low_volume = usual ≤ LOW_VOLUME_USUAL (6), a UI warning only)
+
+Example 1, a typical account (scenarios S2/S3).
+History 20 22 18 21 19 20 23 17: usual 20, MAD 1.5 (×1.4826 = 2.2) < √20 = 4.47, so spread 4.47
+and band 8.8 – 31.2.
+
+       0    5         8.8              20  21           31.2         40
+       ├────●─────────┼────────────────●───●────────────┼────────────●───▶ events
+            5: LOWER −75%                  21: NORMAL +5%            40: HIGHER +100%
+
+Example 2, a one-off spike in the history (scenario R1).
+History 20 20 20 300 20 20 20 20: the mean would be 55 and a drop to 5 might pass as normal.
+The median is 20 and MAD is 0, so the √20 floor gives the same band as Example 1 (8.8 – 31.2):
+week 20 is NORMAL and week 5 is LOWER. This is why the seed's 2026-06-03 spike (account 6) doesn't
+distort the weeks after it.
 """
 
 from collections.abc import Mapping, Sequence
