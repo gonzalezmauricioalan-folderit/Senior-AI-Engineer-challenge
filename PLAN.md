@@ -5,6 +5,43 @@ Why each decision was made: `PLAN_first_iteration.md` (decision log), `Data_inte
 
 **Agents run on Sonnet. Everything that needs judgment has already been decided in this file.** Agents implement; they don't redesign.
 
+**This file is frozen once Task 1 starts.** The prompt asks for the plan as written before coding, so it's never retrofitted to match the code. Anything that changes during implementation goes to `PLAN_CHANGES.md` (what changed, why, which PR) and is summarized in the README.
+
+---
+
+## 0. Interpretation of the ticket
+
+- **The question:** "Is this week's activity normal *for us*?", asked by a customer admin on Monday morning about the week that just ended.
+- **"Normal"** = the account's own recent history, not a benchmark against other customers: the median of the previous 8 complete weeks, with a band robust to one-off spikes (median ± 2.5 × a MAD-based spread, with floors for small counts). Weeks are Mon–Sun in the account's local time.
+- **What it shows:** one verdict for the account (normal / higher / lower / not enough history), the 7 days of the week next to their usual values as context, and every location with its own verdict, ranked so the locations that dropped come first. That covers both product signals: "is this number normal?" (account managers) and "which location needs attention?" (support).
+- **What we chose not to build, and why:**
+  - Daily verdicts: ~1 event per location per weekday, so they'd be noise.
+  - Per-event-type or outcome metrics: too little volume per series; we'd ask product which one matters most.
+  - Seasonality: only ~25 weeks of data.
+  - Holiday/campaign annotations, alerting, ML forecasting, auth.
+- **Single trusted admin:** the account picker is a demo convenience. In production, the account would come from the logged-in session.
+- **Metric:** total events (calls + leads + appointments), deduplicated.
+
+## 0.1 Questions and working assumptions
+
+On a real ticket these would go to product or the data owners. Full table with evidence: `OPEN_QUESTIONS.md`.
+
+| Question | Working assumption |
+|---|---|
+| Why do some accounts have no events (#20)? | Not onboarded yet → "not enough history". |
+| Why is #18's timezone `UTC`? | Probably a misconfiguration → use it as stored and show a warning note. |
+| Why ~20% of events before 07:00 local? | Automated processes → count everything, no business-hours filter. |
+| Why the one-day spike for #6 (Wed 2026-06-03, 805 events, all 15 sites) and +94% for #15 the same week? | A marketing campaign → keep it, flag it as higher, use a median-based baseline so it doesn't distort later weeks. |
+| Why are `duration_seconds` (313 calls) and `outcome` (398 rows) NULL? | Not captured / not known yet → irrelevant to an event count; the rows still count. |
+| Which metric matters most (total vs. per type vs. missed-call rate)? | Total events, for volume and simplicity. |
+| Do businesses work weekends? | Every account has some weekend activity (2–12%) → full Mon–Sun weeks. |
+
+## 0.2 Where would an LLM fit?
+
+**Not in this slice.** The ticket asks a customer to see at a glance whether their week is normal and which location needs attention. The deterministic part already answers that completely: a verdict, a number ("−32% vs. your usual week"), and a ranked list. Those are exact, free, instant and testable. An LLM would add another moving part to build and maintain (prompts, output validation, failure fallbacks, cost and latency) without adding value. It could only restate numbers we already show. It also couldn't explain *why* a week was unusual, because the data has no causes in it: no campaigns, holidays or staffing. Any "explanation" would be invented, which is worse than none on a dashboard customers act on.
+
+**When it would fit:** if the product later captured context the numbers can't express, such as customer-entered notes, call transcripts or campaign records, an LLM could summarize or classify that context next to the verdict. It would sit behind a trust boundary: it never changes the numbers or the status, its claims are checked against the data, and there's a deterministic fallback when the call fails.
+
 ---
 
 ## 1. Workflow
@@ -69,7 +106,9 @@ Per task, strictly sequential:
   - `"1 duplicate event removed from this week."` / `"{n} duplicate events removed from this week."`: n = raw rows not in the clean view whose local date falls in the selected week.
   - `"This account's timezone is set to UTC, which may be a misconfiguration; days and weeks may be shifted."`: when `timezone == "UTC"`.
 - **Rounding** (in the service, not the domain): `usual`, `lower`, `upper` to 1 decimal; `pct_vs_usual` to 3 decimals (a fraction: −0.32 means −32%).
-- **Out of scope:** auth, rate limiting, alerting, ML/forecasting, holiday/campaign calendar, daily verdicts, per-event-type metrics, location drill-down, persisting UI state in the URL.
+- **Aggregation in Python (justified):** SQL handles cleaning (the dedupe view) and filtering by account. Weekly/daily bucketing, baselines and verdicts happen in Python, because they depend on each account's IANA timezone (DST included) and the tests run on SQLite, which has no timezone support. One account is ≤ ~2.7k rows, so this is cheap. Production note for the README: pre-aggregate into a daily rollup table per account/location/local date (Postgres `AT TIME ZONE`), and read only the rollup.
+- **UI state survives a reload** via `localStorage` (3.7).
+- **Out of scope:** auth, rate limiting, alerting, ML/forecasting, holiday/campaign calendar, daily verdicts, per-event-type metrics, location drill-down, shareable URLs.
 
 ---
 
@@ -207,12 +246,14 @@ frontend/
     api/client.ts           # getAccounts(), getWeeklyInsight(accountId, weekStart?) with fetch + AbortSignal; throws ApiError(status, detail)
     hooks/useAccounts.ts  hooks/useWeeklyInsight.ts   # {data, error, loading, reload}
     format.ts               # formatPct, formatNumber, weekLabel, tzAbbreviation, addDays
+    storage.ts              # loadSelection / saveSelection (localStorage, try/catch)
     components/AccountPicker.tsx  WeekPicker.tsx  VerdictCard.tsx  DailyChart.tsx
                LocationsTable.tsx  DataNotes.tsx  StatusBadge.tsx  StateMessage.tsx
     test/setup.ts  test/server.ts (MSW)  test/fixtures.ts
 ```
 - API base URL: `import.meta.env.VITE_API_URL ?? "http://localhost:8000"`.
-- **State lives only in React state:** the selected account (default = the first account from `/accounts`) and `weekStart` (default = that account's `latest_complete_week`). Changing account resets the week. ◀ = −7 days; ▶ = +7 days, disabled at `latest_complete_week`.
+- **State:** the selected account (default = the first account from `/accounts`) and `weekStart` (default = that account's `latest_complete_week`). Changing account resets the week. ◀ = −7 days; ▶ = +7 days, disabled at `latest_complete_week`.
+- **Persistence (survives a reload):** `src/storage.ts` with `loadSelection(): {accountId: number, weekStart: string} | null` and `saveSelection(sel)`, key `relay.dashboard.v1`, JSON. Saved on every change. On load, the stored selection is used only if the account exists in `/accounts` and `weekStart` is a Monday ≤ that account's `latest_complete_week`; otherwise fall back to the defaults (and overwrite). Every `localStorage` access is wrapped in try/catch: if storage is blocked or holds invalid JSON, the app works with the defaults.
 - **Formats:**
   - `formatPct(-0.32)` → `"−32%"` (U+2212), `formatPct(0.05)` → `"+5%"`, `null` → `"—"`
   - usual shown as `~76`; range `64–88` (rounded integers)
@@ -307,20 +348,25 @@ Backend scenarios run through the API (`client`) on SQLite with fake accounts. A
 | F8 | Week navigation: ◀ requests `week_start` −7 days; ▶ disabled at the latest week; changing account resets the week |
 | F9 | API error → `Couldn't load data.`; `Retry` refetches; `Loading…` while pending |
 | F10 | A `not_enough_history` location row shows `—` for usual and % |
+| F11 | Reload: with `relay.dashboard.v1` = `{accountId: 6, weekStart: "2026-06-01"}`, the app opens on account 6, week 2026-06-01 and requests that week |
+| F12 | Invalid stored selection (unknown account, a non-Monday, a week after the latest, or broken JSON) → defaults are used and storage is overwritten |
+| F13 | `localStorage` throws (getItem/setItem mocked to throw) → the app still loads with the defaults and no error is shown |
 
 ---
 
 ## 5. Tasks
 
-### Task 0 — Foundation (orchestrator + human) → PR
-**Goal:** get the existing foundation onto GitHub through a PR.
+### Task 0 — Foundation (orchestrator + human)
+**Goal:** get the foundation onto GitHub, then switch GitHub access to the MCP.
+**Status:** the foundation is already committed directly on `main` (9 commits, before this plan was frozen), so there's no foundation PR; that's an exception to "every task ends in a PR".
 **Scope:**
-- Human: create an empty GitHub repo with your own name (not a fork, not `relay-analytics-starter`) and add it as `origin`.
-- Orchestrator: commit `.gitignore` alone on `main` and push. Then, on branch `task/0-foundation`, commit the rest (compose, migration 0001, seed, scripts, analysis, docs, `.claude/agents/`, CLAUDE.md pointing to this plan) and open a PR. The seed is excluded from the line count. If the docs push the PR over 700 lines, stack them: infra in `0a`, docs in `0b`.
+- Human: rename the GitHub repo to a name of your own (no `relay-analytics-starter`) and make it public before submission.
+- Orchestrator: update `origin`, push `main`, add the GitHub MCP servers, and replace the `gh` instructions in section 1 and `.claude/agents/*.md` with the MCP tools (also allowing those tools in the reviewers' `tools:`). This is the last edit to PLAN.md before it's frozen.
 
 **Tests:** none (no app code).
 **Quickstart:**
 ```bash
+git ls-remote origin main      # main is on GitHub
 docker compose down -v && docker compose up -d --wait && ./scripts/load_seed.sh   # accounts=20, activity_events=12626
 ```
 
@@ -423,9 +469,9 @@ cd backend && .venv/bin/ruff check . && .venv/bin/pytest -q                  # e
 
 ### Task 8 — Frontend skeleton, API client, pickers (`frontend-builder`) · ~450 lines
 **Goal:** the app loads accounts and a weekly insight, and account/week selection works.
-**Scope:** the `frontend/` scaffold (3.7), `npm run gen:api` → `schema.d.ts`, `types.ts`, `client.ts`, both hooks, `format.ts`, `AccountPicker`, `WeekPicker`, `StateMessage`, `App.tsx` (pickers + loading/error; the insight body shows the total and status as plain text for now), `test/setup.ts`, `test/server.ts`, `test/fixtures.ts` (an accounts list + an S2-shaped insight). Scripts: `dev`, `build`, `lint`, `test`, `gen:api`. Update the CLAUDE.md frontend commands.
+**Scope:** the `frontend/` scaffold (3.7), `npm run gen:api` → `schema.d.ts`, `types.ts`, `client.ts`, both hooks, `format.ts`, `storage.ts`, `AccountPicker`, `WeekPicker`, `StateMessage`, `App.tsx` (pickers + loading/error; the insight body shows the total and status as plain text for now), `test/setup.ts`, `test/server.ts`, `test/fixtures.ts` (an accounts list + an S2-shaped insight). Scripts: `dev`, `build`, `lint`, `test`, `gen:api`. Update the CLAUDE.md frontend commands.
 **Tests (integration with MSW):**
-- F8, F9
+- F8, F9, F11, F12, F13
 - `format.ts` unit cases: the pct sign and U+2212, null, week label, tz abbreviation
 
 **Quickstart:**
@@ -454,7 +500,7 @@ cd frontend && npm run lint && npm test -- --run && npm run build
 
 ### Task 11 — Frontend scenario pass + live check (`frontend-builder`) · ~250 lines
 **Goal:** one end-to-end pass over F1–F10 against the full app, plus a manual check against the real API.
-**Scope:** `src/test/scenarios.test.tsx`: one test per F id, rendering `<App />` and checking the full screen per scenario (tasks 8–10 tested pieces). Fix gaps under the rule in section 1. Manual check with `docker compose up` and `npm run dev`: account 6 week 2026-06-01 (▲ higher), account 20 (not enough history), account 18 (UTC note), account 8 (single location). Describe what you saw in the PR.
+**Scope:** `src/test/scenarios.test.tsx`: one test per F id (F1–F13), rendering `<App />` and checking the full screen per scenario (tasks 8–10 tested pieces). Fix gaps under the rule in section 1. Manual check with `docker compose up` and `npm run dev`: account 6 week 2026-06-01 (▲ higher), account 20 (not enough history), account 18 (UTC note), account 8 (single location); pick account 6 week 2026-06-01, reload the page, and check it's restored. Describe what you saw in the PR.
 **Quickstart:**
 ```bash
 cd frontend && npm run lint && npm test -- --run && npm run build
@@ -475,24 +521,57 @@ curl -s -o /dev/null -w "%{http_code}\n" localhost:8080        # 200
 curl -s localhost:8000/accounts | head -c 100
 ```
 
-### Task 13 — Write-up (orchestrator + human) → PR
-**Goal:** the submission README.
+### Task 13 — README (orchestrator + human) → PR
+**Goal:** the README the prompt requires, so a reviewer can run the project and reconstruct the reasoning without us in the room.
 **Content:**
-- problem and approach
-- the definition of "normal" and why median + MAD (`Detection_tuning.md`)
-- the data quirks and how each is handled (`Data_integrity.md`, `OPEN_QUESTIONS.md`)
-- limitations: no seasonality, ~25 weeks of data, small counts, low-volume locations are rarely flagged lower, an empty "needs attention" list is common, SQLite tests vs Postgres
-- production notes: rollup tables / medallion, dedupe at ingestion, Postgres tests in CI, auth, all-events-per-request
-- out of scope
-- how the work was done: spec-driven, Sonnet builder/reviewer agents, the Docker sandbox in bypass mode
+- **Run it locally** (DB setup, env vars, commands): one command, with a check that a **fresh clone** comes up in **≤ 15 minutes**. Time it and write down the result.
+- **Tests:** a one-line command for each side, e.g. `cd backend && .venv/bin/pytest -q` and `cd frontend && npm test -- --run`.
+- **Stack and why:**
+  - FastAPI + React, the strongest stack for us
+  - SQLAlchemy Core with raw SQL instead of an ORM
+  - Alembic migrations
+  - aggregation in Python (and why)
+  - React state + `localStorage`, no state library
+  - SQLite for tests
+- **Interpretation of the ticket** and how "normal" is defined, with why median + MAD (`Detection_tuning.md`).
+- **Assumptions** (PLAN.md 0.1 / `OPEN_QUESTIONS.md`) and the **data quirks** and how each is handled (`Data_integrity.md`).
+- **Design decisions and trade-offs:** dedupe-only cleaning, weekly vs. daily verdicts, Mon–Sun, the 8-week window, floors, the "lower only" ranking (and that the needs-attention list is often empty), low-volume warnings.
+- **Deliberately deferred** and why: the LLM (PLAN.md 0.2), daily verdicts, per-type metrics, seasonality, annotations, auth, Postgres tests in CI.
+- **With another day:** the daily rollup table, per-event-type/outcome metrics after asking product, Postgres integration tests, an annotations calendar.
+- **Changes from the plan:** a summary of `PLAN_CHANGES.md`.
 
-**Quickstart:** the human reads the README on the PR.
+**Quickstart:** from a fresh clone in a temporary directory, follow the README word for word and record the time.
+
+### Task 14 — AI interaction log (orchestrator + human) → PR
+**Goal:** the required `ai-log/`, raw and honest, not sanitized.
+**Content:**
+- `ai-log/transcripts/`: the raw Claude Code session transcripts (planning sessions + every builder/reviewer agent run), exported from `~/.claude/projects/` as JSONL plus a readable Markdown rendering. Secrets and the sandbox's personal data are redacted, nothing else.
+- `ai-log/README.md`:
+  - **Tools/models, one honest line:** Claude Code with Opus for planning/orchestration and data analysis; Sonnet subagents for building and reviewing; the human for decisions and PR review.
+  - **Timeline:** planning first (iterations 1–2, data checks, tuning, PLAN.md), then implementation task by task, with links to the PRs.
+  - **Accepted / rejected / redirected, with why.** Examples from planning:
+    - the human deferred the cleaning policy until the data checks ran
+    - the human proposed Mon–Sat; the data (Sat ≈ Sun) changed it to Mon–Sun
+    - the human overrode the ranking recommendation ("lower only")
+    - the human chose `localStorage` and kept aggregation in Python
+    - the human rejected building the LLM feature
+  - **Reflection: specific moments where the AI was wrong or was corrected.** For example:
+    - `CLAUDE.md` described account 6's spike as "starting around 06-03" when it lasts one day
+    - the AI's first plan put "UI state in the URL" out of scope, missing the prompt's reload requirement; caught in the plan review
+    - a test-factory design that would have silently dropped a history week (events on a Tuesday)
+    - a Pydantic `date: date` field that would break
+    - the tuning run showed that the recommended floors never change a verdict on this data
+    - review findings from the agent PRs
+- Committed agent-context artifacts are listed: `CLAUDE.md`, `.claude/agents/*.md`.
+
+**Quickstart:** the human reads `ai-log/README.md` and spot-checks a transcript.
 
 ---
 
 ## 6. Order
 
 ```
-0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
+0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14
 ```
+Keep notes for Task 14 as you go: after each human review, the orchestrator adds the accepted/rejected/redirected items and the agent mistakes caught to `ai-log/notes.md`.
 Backend tasks first: the frontend builds against the `openapi.json` produced in Task 5, and the backend scenario tests (6–7) run before any frontend work, so contract bugs are caught early.
