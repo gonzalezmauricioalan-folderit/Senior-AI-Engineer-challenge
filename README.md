@@ -25,8 +25,14 @@ docker compose down -v && docker compose up -d --build --wait
 
 From a fresh clone, the whole stack came up in about **2.5 minutes** (the budget was 15).
 
-If port 5432 is already in use on your machine, run `POSTGRES_PORT=5434 docker compose up -d --build --wait`.
-The other settings are in `.env.example`; the defaults work without changes.
+**Database and env vars.** Docker Compose starts Postgres 16, and the api container runs the migrations and
+loads the seed on its first start. No `.env` is needed: the defaults are in `.env.example` (copy it to `.env` to
+change them).
+- `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`: all `relay`.
+- `POSTGRES_PORT` (default `5432`): if that port is in use on your machine, run
+  `POSTGRES_PORT=5434 docker compose up -d --build --wait`.
+- `DATABASE_URL`: only for running the backend outside Docker.
+- `AS_OF_DATE` (optional, `YYYY-MM-DD`): pins "today". By default it's the date of the newest event.
 
 ### What to look at
 
@@ -42,9 +48,11 @@ The most recent week (July 20) is normal for every customer. These weeks show th
 
 ## Tests
 
+No Docker needed: the backend tests use SQLite, and the frontend tests mock the api.
+
 ```bash
-cd backend && .venv/bin/pytest -q      # api, 88 tests, no Docker needed
-cd frontend && npm test -- --run       # dashboard, 46 tests, no running api needed
+cd backend && python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt && .venv/bin/pytest -q   # api, 88 tests (Python 3.12+)
+cd frontend && npm ci && npm test -- --run                                                                      # dashboard, 46 tests (Node 22)
 ```
 
 ## How "normal" is decided
@@ -127,8 +135,17 @@ We used the data exactly as delivered and never changed it. The code handles its
 - **No AI/LLM feature.** The numbers already answer the question exactly. An LLM could only repeat them, and it
   can't explain *why* a week was unusual, because the data doesn't contain causes (campaigns, holidays, staffing).
   An invented explanation is worse than none on a screen customers act on.
-- **Stack:** FastAPI + Postgres on the backend, React + TypeScript on the frontend. It's the stack we know best.
-  The calculations are in Python, where timezones are handled correctly and the tests are fast.
+- **Stack:** FastAPI + Postgres on the backend, React + TypeScript (Vite) on the frontend. It's the stack we
+  know best. Notable choices within it:
+  - **Raw SQL with SQLAlchemy Core, no ORM.** There are only a few read queries; plain SQL is easier to review
+    and runs the same on Postgres and SQLite.
+  - **Alembic migrations.** The starter schema is migration `0001`, plus an index and a view that removes the
+    duplicates. The seed itself is never changed.
+  - **Aggregation in Python.** Weeks and days depend on each customer's timezone, which Python handles
+    correctly and SQLite can't. SQL does the cleaning and the filtering.
+  - **State in React plus `localStorage`, no state library.** The only state is the selected account and week,
+    and it survives a page reload.
+  - **SQLite for tests,** so they're fast and need no Docker.
 
 ## Left out on purpose
 
