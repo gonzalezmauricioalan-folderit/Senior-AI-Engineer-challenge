@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import AccountPicker from "./components/AccountPicker";
+import DailyChart from "./components/DailyChart";
+import DataNotes from "./components/DataNotes";
 import StateMessage from "./components/StateMessage";
+import VerdictCard from "./components/VerdictCard";
 import WeekPicker from "./components/WeekPicker";
 import { useAccounts } from "./hooks/useAccounts";
 import { useWeeklyInsight } from "./hooks/useWeeklyInsight";
@@ -56,10 +59,11 @@ export default function App() {
           {insight.loading && <StateMessage message="Loading…" />}
           {insight.error && <StateMessage message="Couldn't load data." onRetry={insight.reload} />}
           {insight.data && (
-            <section>
-              <p>{insight.data.summary.total} events</p>
-              <p>Status: {insight.data.summary.status}</p>
-            </section>
+            <>
+              <VerdictCard summary={insight.data.summary} baseline={insight.data.baseline} />
+              <DailyChart days={insight.data.days} />
+              <DataNotes notes={insight.data.data_notes} />
+            </>
           )}
         </>
       )}

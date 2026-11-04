@@ -73,3 +73,55 @@ export const insightS2 = {
   ],
   data_notes: [],
 } satisfies WeeklyInsight;
+
+const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+const DATES = ["2026-07-20", "2026-07-21", "2026-07-22", "2026-07-23", "2026-07-24", "2026-07-25", "2026-07-26"] as const;
+
+/** Seven days from daily totals and usual values, so the scenario fixtures stay short. */
+function daysOf(totals: number[], usuals: (number | null)[]): WeeklyInsight["days"] {
+  return WEEKDAYS.map((weekday, i) => ({ date: DATES[i] ?? "", weekday, total: totals[i] ?? 0, usual: usuals[i] ?? null }));
+}
+
+// S1: account without events. No history, so no usual, no locations, and 7 zero days.
+export const insightS1 = {
+  account: { id: 20, name: "Quiet Harbor Spa", timezone: "UTC" },
+  week: { start: "2026-07-20", end: "2026-07-26" },
+  baseline: { method: "median_mad", weeks_used: 0, start: null, end: null },
+  summary: { total: 0, usual: null, lower: null, upper: null, pct_vs_usual: null, status: "not_enough_history", low_volume: false },
+  days: daysOf([0, 0, 0, 0, 0, 0, 0], [null, null, null, null, null, null, null]),
+  locations: [],
+  data_notes: [],
+} satisfies WeeklyInsight;
+
+// S3a: same history as S2, week = 5 -> lower_than_usual, -75%.
+export const insightS3a = {
+  ...insightS2,
+  summary: { total: 5, usual: 20.0, lower: 8.8, upper: 31.2, pct_vs_usual: -0.75, status: "lower_than_usual", low_volume: false },
+  days: daysOf([1, 1, 1, 1, 1, 0, 0], [3, 3, 3, 3, 3, 2.5, 2.5]),
+  locations: [],
+} satisfies WeeklyInsight;
+
+// S3b: same history as S2, week = 40 -> higher_than_usual, +100%.
+export const insightS3b = {
+  ...insightS2,
+  summary: { total: 40, usual: 20.0, lower: 8.8, upper: 31.2, pct_vs_usual: 1.0, status: "higher_than_usual", low_volume: false },
+  days: daysOf([6, 6, 6, 6, 6, 5, 5], [3, 3, 3, 3, 3, 2.5, 2.5]),
+  locations: [],
+} satisfies WeeklyInsight;
+
+// B5: history [5]*8, week = 0 -> normal (lower bound clamps at 0) and the account is low volume (F5).
+export const insightLowVolume = {
+  ...insightS2,
+  summary: { total: 0, usual: 5.0, lower: 0.0, upper: 12.0, pct_vs_usual: -1.0, status: "normal", low_volume: true },
+  days: daysOf([0, 0, 0, 0, 0, 0, 0], [1, 1, 1, 1, 1, 0, 0]),
+  locations: [],
+} satisfies WeeklyInsight;
+
+// R2 + R7 notes, exactly as the backend words them (backend/app/service.py).
+export const DUPLICATE_NOTE = "1 duplicate event removed from this week.";
+export const UTC_NOTE =
+  "This account's timezone is set to UTC, which may be a misconfiguration; days and weeks may be shifted.";
+export const insightWithNotes = {
+  ...insightS2,
+  data_notes: [DUPLICATE_NOTE, UTC_NOTE],
+} satisfies WeeklyInsight;
