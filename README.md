@@ -32,7 +32,8 @@ change them).
 - `POSTGRES_PORT` (default `5432`): if that port is in use on your machine, run
   `POSTGRES_PORT=5434 docker compose up -d --build --wait`.
 - `DATABASE_URL`: only for running the backend outside Docker.
-- `AS_OF_DATE` (optional, `YYYY-MM-DD`): pins "today". By default it's the date of the newest event.
+- `AS_OF_DATE` (optional, `YYYY-MM-DD`): pins "today" when you run the backend outside Docker. Docker Compose
+  doesn't pass it, so the dockerized api always uses the date of the newest event.
 
 ### What to look at
 
@@ -51,9 +52,34 @@ The most recent week (July 20) is normal for every customer. These weeks show th
 No Docker needed: the backend tests use SQLite, and the frontend tests mock the api.
 
 ```bash
-cd backend && python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt && .venv/bin/pytest -q   # api, 88 tests (Python 3.12+)
-cd frontend && npm ci && npm test -- --run                                                                      # dashboard, 46 tests (Node 22)
+(cd backend && python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt && .venv/bin/pytest -q)   # api, 88 tests (Python 3.12+)
+(cd frontend && npm ci && npm test -- --run)                                                                      # dashboard, 46 tests (Node 22)
 ```
+
+## Where to look
+
+| File | What it is |
+|---|---|
+| [`PLAN.md`](PLAN.md) | The plan, frozen before the application code: interpretation of the ticket (§0), questions and assumptions (§0.1), [Where would an LLM fit?](PLAN.md#02-where-would-an-llm-fit) (§0.2), decisions, test scenarios with expected values, tasks. |
+| [`PLAN_CHANGES.md`](PLAN_CHANGES.md) | Every change made after the plan was frozen, with the reason and the PR. |
+| [`PLAN_first_iteration.md`](PLAN_first_iteration.md) | The first plan, written by hand. It became the decision log ("DECIDED" + why). |
+| [`OPEN_QUESTIONS.md`](OPEN_QUESTIONS.md) | Questions we'd ask product, with the working assumption for each. |
+| [`Data_integrity.md`](Data_integrity.md) | Checks on the seed data, each with its SQL and result. Reference material: start with the summary at the top. |
+| [`Detection_tuning.md`](Detection_tuning.md) | Why the range is as wide as it is, from [`analysis/tune_detection.py`](analysis/tune_detection.py). |
+| [`openapi.json`](openapi.json) | The API contract. The frontend types are generated from it. |
+| [`ai-log/`](ai-log/README.md) | The AI interaction log: raw transcripts and an index with line references. |
+| [`CLAUDE.md`](CLAUDE.md), [`.claude/agents/`](.claude/agents/) | The agent context written for this task (see below). |
+
+### Agent context written for this task
+
+I wrote reusable instructions for the agents, with Claude Code, and committed them:
+
+- [`CLAUDE.md`](CLAUDE.md): project context loaded by every Claude Code session. It has the stack and commands,
+  the data model, the known data quirks, and the working rules (one branch per task, no pushes from the sandbox,
+  `PLAN.md` frozen).
+- [`.claude/agents/`](.claude/agents/): four custom subagents. `api-builder` and `frontend-builder` implement
+  one task from the plan on its own branch. `api-reviewer` and `frontend-reviewer` check that work against the
+  plan, re-run it, and write a review. I tightened their rules after the first reviews.
 
 ## How "normal" is decided
 
@@ -135,7 +161,7 @@ We used the data exactly as delivered and never changed it. The code handles its
 - **No AI/LLM feature.** The numbers already answer the question exactly. An LLM could only repeat them, and it
   can't explain *why* a week was unusual, because the data doesn't contain causes (campaigns, holidays, staffing).
   An invented explanation is worse than none on a screen customers act on.
-- **Stack:** FastAPI + Postgres on the backend, React + TypeScript (Vite) on the frontend. It's the stack we
+- **Stack:** FastAPI + Postgres on the backend, React + TypeScript (Vite) on the frontend. It's the stack I
   know best. Notable choices within it:
   - **Raw SQL with SQLAlchemy Core, no ORM.** There are only a few read queries; plain SQL is easier to review
     and runs the same on Postgres and SQLite.
@@ -168,16 +194,17 @@ We used the data exactly as delivered and never changed it. The code handles its
 
 1. **A first plan, written by hand** (`PLAN_first_iteration.md`): the questions to answer about the data, the
    options for each decision, and the open points.
-2. **Refined with the AI as a challenger.** We used the AI to question the structure of that first plan, run the
-   data checks (`Data_integrity.md`) and the tuning (`Detection_tuning.md`), and fill the gaps. Every decision
-   was taken by a person. Several rounds produced the final plan (`PLAN.md`), frozen before any code.
+2. **Refined with the AI as a challenger.** I used the AI to question the structure of that first plan, run the
+   data checks (`Data_integrity.md`) and the tuning (`Detection_tuning.md`), and fill the gaps. I made every
+   decision. Several rounds produced the final plan (`PLAN.md`), frozen before any code.
 3. **Executed by four agents**, one task at a time, each task on its own branch and pull request:
    - `api-builder` and `frontend-builder` implement a task from the plan;
    - `api-reviewer` and `frontend-reviewer` check it against the plan and re-run it;
-   - a person reviews and merges each pull request.
+   - I review and merge each pull request.
 
 The agent definitions are in `.claude/agents/`, and the AI log is in `ai-log/`.
 
-**Changes from the plan:** we ran out of time, so we skipped one task: a final round of end-to-end tests of the
-full dashboard and a manual check in the browser. The individual parts are still tested. Details are in
+**Changes from the plan:** I ran out of time, so I skipped one task: a final round of end-to-end tests of the
+full dashboard. The individual parts are still tested. The dashboard was checked by hand in a browser during the
+final review (that's where the "−69% but Normal" row in "Known limit" was found). Details are in
 `PLAN_CHANGES.md`.
