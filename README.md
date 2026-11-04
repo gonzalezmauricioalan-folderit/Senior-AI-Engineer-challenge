@@ -1,227 +1,166 @@
 # Relay: "is this week's activity normal for us?" (DASH-247)
 
 A dashboard that tells a customer admin, on Monday morning, whether last week's activity (calls, leads,
-appointments) was normal for their account, and which of their locations dropped. The ticket is
-`DASH-247`. "Normal" means the account's own recent history: the median of the previous 8 complete weeks, with a
-band that one-off spikes can't distort.
+appointments) was normal for their business, and which of their locations dropped.
+
+"Normal" means normal **for that customer**: we compare the week with the customer's own previous 8 weeks, not
+with other customers.
 
 ## Run it
 
-Prerequisites: Docker with compose v2, and free host ports 5432 (db), 8000 (api) and 8080 (web).
+You need Docker with compose v2, and free ports 5432, 8000 and 8080.
 
 ```bash
-docker compose up -d --build --wait    # db + api + web; the api migrates and seeds itself
+docker compose up -d --build --wait    # database + api + dashboard; the api loads the data itself
 ```
 
 - Dashboard: http://localhost:8080
-- API: http://localhost:8000 (health check: http://localhost:8000/health, docs: http://localhost:8000/docs)
+- API: http://localhost:8000 (docs: http://localhost:8000/docs)
 
-Reset to a clean database:
+Start over with a clean database:
 
 ```bash
 docker compose down -v && docker compose up -d --build --wait
 ```
 
-**Fresh-clone check (budget: 15 minutes):** from `git clone` in a temporary directory, `docker compose build
---no-cache` followed by `docker compose up -d --wait` took **2 min 20 s** until db, api and web were healthy, the
-dashboard returned 200, and `/health` returned `{"status":"ok","db":"ok"}`. The base images (`postgres`, `python`,
-`node`, `nginx`) were already pulled; the pip and npm installs ran from scratch. On that host port 5432 was taken,
-so it ran with `POSTGRES_PORT=5434` (see below).
+From a fresh clone, the whole stack came up in about **2.5 minutes** (the budget was 15).
 
-**Ports and env vars.** The defaults work without a `.env`. `.env.example` lists the variables; copy it to `.env`
-to change them.
+If port 5432 is already in use on your machine, run `POSTGRES_PORT=5434 docker compose up -d --build --wait`.
+The other settings are in `.env.example`; the defaults work without changes.
 
-| Variable | Default | What it does |
+### What to look at
+
+The most recent week (July 20) is normal for every customer. These weeks show the other cases:
+
+| Customer | Week | What you see |
 |---|---|---|
-| `POSTGRES_PORT` | `5432` | Host port of the db. Set it if 5432 is taken, e.g. `POSTGRES_PORT=5434 docker compose up -d --build --wait`. The api is not affected: inside compose it reaches the db at `db:5432`. |
-| `API_PORT` | `8000` | Host port of the api. The web image bakes `http://localhost:${API_PORT}` in at build time, so rebuild after changing it. |
-| `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | `relay` | Database credentials. |
-| `DATABASE_URL` | `postgresql+psycopg://relay:relay@localhost:5432/relay` | Used by Alembic and the api when they run on the host. |
-| `AS_OF_DATE` | unset | `YYYY-MM-DD`. Pins "today". Unset, it's the local date of the newest event, so the seed's latest complete week is the week of 2026-07-20. |
-| `CORS_ORIGINS` | `http://localhost:5173,http://localhost:8080` | Origins the api allows. |
-
-The web port is fixed at **8080** because it's in the api's default CORS list.
-
-**What to look at.** The default week (2026-07-20) is normal for every account. To see verdicts that need
-attention, pick:
-
-| Account | Week | What it shows |
-|---|---|---|
-| 6 Metro Collision Centers | 2026-06-01 | Higher (880 vs ~66). All 15 sites are higher. This is the one-day spike on 2026-06-03. |
-| 2 Harbor Dental Partners | 2026-07-06 | Lower (18 vs ~32.5, −45%). |
-| 1 Summit Auto Group | 2026-06-01 | The account is normal, but Site F is lower (2 vs ~10) and is ranked first. |
-| 20 Quiet Harbor Spa | any | Not enough history (no events). |
-| 18 Capital City Storage | any | The UTC-timezone data note. |
-
-### Local development (without the api and web containers)
-
-```bash
-cp .env.example .env                                        # optional; the defaults match
-docker compose up -d --wait db                              # db only
-uv venv backend/.venv && uv pip install --python backend/.venv/bin/python -r backend/requirements-dev.txt
-./scripts/load_seed.sh                                      # migrate + load data/seed.sql (skips if already loaded)
-(cd backend && .venv/bin/uvicorn app.main:app --reload --port 8000)
-(cd frontend && nvm use && npm ci && npm run dev)           # Node 22; http://localhost:5173
-```
+| 6 Metro Collision Centers | June 1 | Much higher than usual, at every location (a one-day spike on June 3). |
+| 2 Harbor Dental Partners | July 6 | Lower than usual (−45%). |
+| 1 Summit Auto Group | June 1 | The customer is normal, but one location (Site F) dropped and is listed first. |
+| 20 Quiet Harbor Spa | any | Not enough history yet (no activity at all). |
+| 18 Capital City Storage | any | A warning that the customer's timezone looks misconfigured. |
 
 ## Tests
 
 ```bash
-cd backend && .venv/bin/pytest -q             # 88 tests on SQLite, no Docker needed (~8 min; -m "not slow" skips the full-seed ones)
-cd frontend && npm test -- --run              # 46 tests, Vitest + MSW, no live api
+cd backend && .venv/bin/pytest -q      # api, 88 tests, no Docker needed
+cd frontend && npm test -- --run       # dashboard, 46 tests, no running api needed
 ```
 
-Lint: `cd backend && .venv/bin/ruff check . && .venv/bin/ruff format --check .` and `cd frontend && npm run lint`.
-The committed `openapi.json` is the contract between the two sides. A backend test fails if it's stale
-(`backend/.venv/bin/python scripts/export_openapi.py` regenerates it), and the frontend types are generated from it
-(`npm run gen:api`).
+## How "normal" is decided
 
-## Stack and why
+1. Take the customer's last 8 complete weeks (Monday to Sunday, in the customer's own timezone).
+2. The **usual** week is the middle value of those 8 weeks (the median). One crazy week can't move it.
+3. Around the usual value we draw a **range** of normal variation, based on how much those weeks normally move.
+4. A week is **higher** or **lower than usual** only if it falls outside that range and the change is large
+   enough to matter. Otherwise it's **normal**.
+5. With fewer than 4 weeks of history, we say **not enough history** instead of guessing.
 
-- **FastAPI + React (TypeScript, Vite).** The stack we're strongest in. FastAPI gives typed models and an OpenAPI
-  contract for free, and the frontend types are generated from that contract.
-- **Postgres 16, SQLAlchemy Core with raw SQL, no ORM.** There are only three queries, all reads. Plain SQL in
-  `text()` is easier to review than ORM mappings and runs unchanged on SQLite.
-- **Alembic migrations.** The starter `schema.sql` is wired in as migration `0001`, plus an index on
-  `(account_id, occurred_at)` and the `clean_activity_events` view. The schema exists only in migrations.
-- **Aggregation in Python, not SQL.** Weeks and days have to be bucketed in each account's IANA timezone, DST
-  included, and the tests run on SQLite, which has no timezone support. SQL does the cleaning (the dedupe view)
-  and the filter by account. Python (`zoneinfo`) does the bucketing, baselines and verdicts. One account is at most
-  ~2.7k rows, so this is cheap. In production we'd pre-aggregate into a daily rollup table per
-  account/location/local date and read only that.
-- **React state + `localStorage`, no state or data-fetching library.** The state is one selection (account and
-  week). It survives a reload through `localStorage`, and a stored value that is invalid or blocked falls back to
-  the default.
-- **SQLite for tests.** Fast and hermetic. Every test builds its own data through factories, and the "golden"
-  tests load the real seed. The cost: Postgres-specific behavior isn't tested in CI (see "With another day").
+The same check runs for the whole customer and for each location. Locations that dropped are listed first.
 
-## Interpretation of the ticket
+Why this method: the data has a huge one-day spike (customer 6, June 3). An average-based method would treat
+that spike as part of "usual" for the next two months, and then even a week with zero activity would look
+normal. The median ignores the spike. We tuned how wide the range is so that it flags real changes without
+flagging random noise every week. The numbers behind this are in `Detection_tuning.md`.
 
-- **The question** is asked by a customer admin on Monday morning, about the week that just ended (Mon–Sun in the
-  account's local time).
-- **"Normal for us"** is the account's own history, not a comparison with other customers.
-- **What the screen shows:** one verdict for the account (normal / higher / lower / not enough history), the 7
-  days of the week next to their usual values as context, and every location with its own verdict, ranked so that
-  the locations that dropped come first.
-- **Metric:** total events (calls + leads + appointments), deduplicated.
+## Known limit: a small location can drop 70% and still say "normal"
 
-### How "normal" is defined
+You'll see it on customer 14, Site B, week of July 20: **2 events against a usual of about 7 (−69%), marked
+"Normal"**.
 
-For a week with total `value` and the totals of the previous 8 complete weeks as `history`
-(`backend/app/domain/detection.py`):
+**Why.** Site B usually gets about 7 events a week, and with so few events the number jumps around by pure
+chance: its last 8 weeks were 5, 6, 8, 7, 2, 7, 4 and 8. A week of 2 already happened in June, and the next week
+was back to 7. So from the data alone, this week can't be told apart from bad luck. We chose not to flag weeks like
+this: a stricter rule would catch this one, but it would also flag ordinary weeks at small locations almost
+every week, and a customer would stop trusting the warnings.
 
-```
-fewer than 4 history weeks          -> not_enough_history
-usual  = median(history)
-MAD    = median(|x − usual|)
-spread = max(1.4826 · MAD, √usual)                   # never narrower than Poisson noise
-band   = [max(0, usual − 2.5·spread), usual + 2.5·spread]
-flag if value is outside the band AND |value − usual| ≥ 3 AND |pct| ≥ 20%
-```
+**We knew this from planning.** The tuning (`Detection_tuning.md`) showed that most locations get 10 events a
+week or fewer, so at location level only very large drops can stand out. That's why:
+- **The verdict at the top of the screen, for all locations together, is the one to read first.** Adding up
+  every location gives enough events to catch real drops, such as customer 2's −45% in the week of July 6.
+- **The location rows are the detail:** they show which location caused that change, with drops listed first.
 
-**Why median + MAD.** `Detection_tuning.md` ran a grid over k, N and the floors against the seed and a
-Poisson-noise baseline:
+**We assume real customers have more volume per location** than this sample (see Assumptions). With more
+events the range gets tighter (0 to 13 at 7 a week, 32 to 68 at 50), so real drops stand out.
 
-- **Robust to spikes.** Account 6's spike week (880 events vs ~66) is flagged higher, and the weeks after it keep
-  a band like the one before it. With mean ± std, "usual" jumps to ~170 and the band to 0–888 for 8 weeks: even
-  zero events would read normal.
-- **k = 2.5.** At k = 2 the flag rate (6.0%) is barely above pure noise (5.2%). At k = 3 no account week is ever
-  lower, so a real −45% drop (account 2, week of 2026-07-06) is missed. k = 2.5 flags 3% of account-weeks, at
-  1.7× the noise rate.
-- **N = 8 weeks.** About as stable as 12 weeks, adapts to level changes within two months, and matches the
-  wireframe's "vs. previous 8 weeks".
-- **The floors (3 events, 20%)** never change a verdict on this seed. The `√usual` term already implies them.
-  They're cheap insurance for volumes outside the seed's range.
+**What's missing is that the screen says so.** It shows "−69%" next to "Normal" without explaining why. The fix
+is to show each location's normal range on its row, so the verdict explains itself:
+
+> 2 events · usual 7 · normal for this location: 0 to 13
+
+The rule stays the same. The API already returns the range; only the dashboard needs to show it.
 
 ## Assumptions
 
-On a real ticket these would go to product or the data owners. Evidence: `OPEN_QUESTIONS.md` and
-`Data_integrity.md`.
+On a real ticket we'd ask product or the data owners. For the exercise we assumed:
 
-| Question | Working assumption |
+| Question | Assumption |
 |---|---|
-| Why does account 20 have no events? | Not onboarded yet → "not enough history". |
-| Why is account 18's timezone `UTC`? | Probably a misconfiguration. We use it as stored and show a data note. |
-| Why are ~20% of events before 07:00 local? | Automated processes. No business-hours filter; everything counts. |
-| Why account 6's one-day spike (2026-06-03) and +94% for account 15 the same week? | A marketing campaign. Kept, flagged higher, and the median keeps it out of later baselines. |
-| Why are `duration_seconds` and `outcome` sometimes NULL? | Not captured yet. Irrelevant to an event count; the rows still count. |
-| Which metric matters most? | Total events, for volume and simplicity. |
-| Do businesses work weekends? | Every account has some weekend activity (2–12%) → full Mon–Sun weeks. |
+| Why does customer 20 have no activity? | They haven't started using the product yet → "not enough history". |
+| Why is customer 18's timezone UTC? | Probably a setup mistake → we use it as is and show a warning. |
+| Why do ~20% of events happen before 7 am? | Automated processes → we count everything. |
+| Why the spike for customer 6 on June 3 (and +94% for customer 15 that week)? | A marketing campaign → we keep it and show it as higher than usual. |
+| Some events have no outcome or call duration. | Not recorded yet → they still count as events. |
+| Which number matters most? | Total events (calls + leads + appointments). |
+| Is this volume typical? Most locations get 10 events a week or fewer. | Real customers have more volume per location than this sample. |
+| Do these businesses work weekends? | Every customer has some weekend activity → weeks are Monday to Sunday. |
 
-### Data quirks and how each is handled
+## How we handled messy data
 
-The seed is used as-is and the raw tables are never modified (`Data_integrity.md` has the full profile).
+We used the data exactly as delivered and never changed it. The code handles its problems:
 
-| Quirk | Handling |
-|---|---|
-| 12 exact duplicate pairs (every column except `id`) | Removed by the `clean_activity_events` view (lowest `id` kept). The week's data notes say how many were removed. |
-| 27 near-duplicates (1–60 s apart) | Kept. They differ in duration or outcome, so they look like distinct events. |
-| Account 6's one-day spike | Kept and flagged higher. The median/MAD baseline absorbs it for later weeks. |
-| Account 20 has no events | "Not enough history" card and an empty locations table. |
-| Account 18 has timezone `UTC` | Used as stored, with a warning note that days and weeks may be shifted. |
-| `America/Phoenix` (no DST) and DST switches | All bucketing goes through `zoneinfo`, so each account's offsets are correct. |
-| First and last weeks have one day each | Never offered or evaluated. The first complete week is 2026-02-02 and the last is 2026-07-20. Earlier, partial or future weeks → 422. |
-| Data ends months before today | "Today" is the date of the newest event (or `AS_OF_DATE`), not the wall clock. |
-| NULL `outcome` / `duration_seconds` | Irrelevant to the count; the rows still count. |
-| Location names repeat across accounts (`Site A`…) | Locations are always scoped by account. |
+- **Exact duplicates** (12 pairs): counted once. The week shows a note when duplicates were removed.
+- **The one-day spike:** kept, because it's real activity the customer should see. The method keeps it from
+  distorting later weeks.
+- **A customer with no data:** shows "not enough history" instead of an error.
+- **Timezones:** every week and day is computed in the customer's own timezone, including daylight saving time
+  and Phoenix, which has none.
+- **Partial weeks** at the start and end of the data: never shown, because they would always look low.
+- **The data ends months ago:** "this week" means the last week with data, not the calendar.
 
-## Design decisions and trade-offs
+## Design decisions
 
-- **Dedupe-only cleaning.** Only exact duplicates are removed. Anything else would mean guessing which real-looking
-  events are wrong.
-- **Weekly verdicts, daily context.** At ~1 event per location per weekday, daily verdicts would be noise. The
-  days are shown next to their usual values without a status.
-- **Mon–Sun weeks.** We first proposed Mon–Sat. The data showed Saturday ≈ Sunday and weekend activity on every
-  account, so weeks include Sunday.
-- **8-week window, k = 2.5, floors (3, 20%).** See "Why median + MAD" above.
-- **Ranking is "lower only".** Only `lower_than_usual` locations count as "needs attention" and come first,
-  biggest drop first. Higher and normal follow together by name. On this data the needs-attention list is usually
-  empty: the default week has no flagged location on any account.
-- **Low-volume warnings.** When usual ≤ 6, percentages are noisy and the UI says so, on the account and on each
-  location row. **Known limit:** below usual ≈ 6.25 (= k²) the lower bound is 0, so a small site can't be flagged
-  lower even at zero events. Just above that, it can only be flagged lower at 0 events. Example: account 14,
-  Site B, week of 2026-07-20 reads normal at 2 events vs usual 6.5 (−69%): its band is 0.1–12.9, and the
-  low-volume warning doesn't show because 6.5 > 6. If product cares about sites "going dark", that needs its own
-  rule (`Detection_tuning.md` §7).
+- **Weekly verdicts, daily context.** A location has about one event per day, so a verdict per day would be
+  noise. The chart shows each day next to its usual value, without a verdict.
+- **Only drops count as "needs attention".** Locations that dropped come first. Higher-than-usual weeks are shown
+  but not treated as problems.
+- **No AI/LLM feature.** The numbers already answer the question exactly. An LLM could only repeat them, and it
+  can't explain *why* a week was unusual, because the data doesn't contain causes (campaigns, holidays, staffing).
+  An invented explanation is worse than none on a screen customers act on.
+- **Stack:** FastAPI + Postgres on the backend, React + TypeScript on the frontend. It's the stack we know best.
+  The calculations are in Python, where timezones are handled correctly and the tests are fast.
 
-## Deliberately deferred
+## Left out on purpose
 
-- **An LLM feature.** The numbers already answer the question exactly, for free, instantly and testably. An LLM
-  could only restate them, and it couldn't explain *why* a week was unusual, because the data has no causes in it
-  (no campaigns, holidays or staffing). An invented explanation is worse than none on a dashboard customers act
-  on. It would fit once the product captures context, such as notes, transcripts or campaign records, behind a
-  trust boundary that never changes the numbers (PLAN.md 0.2).
-- **Daily verdicts:** too little volume per day.
-- **Per-event-type and outcome metrics:** too little volume per series, and we'd ask product which one matters.
-- **Seasonality:** 25 weeks of data can't show annual patterns.
-- **Holiday and campaign annotations, alerting, ML forecasting:** out of scope by the ticket or by volume.
-- **Auth:** the account picker is a demo convenience. In production the account comes from the session.
-- **Postgres tests in CI:** the tests run on SQLite. The Postgres path is checked by running the stack.
+- Alerts and notifications, forecasting (out of scope in the ticket).
+- Separate numbers per event type or outcome (for example, missed calls): we'd first ask product which one
+  matters.
+- Seasonality: 6 months of data can't show yearly patterns.
+- Marking holidays or campaigns, login and permissions.
 
 ## With another day
 
-- A daily rollup table per account/location/local date (Postgres `AT TIME ZONE`), so the api reads aggregates
-  instead of events.
-- Per-event-type and outcome metrics (for example, missed-call rate), after asking product which one matters.
-- Postgres integration tests in CI.
-- An annotations calendar, so a campaign week can be marked as expected.
-- A "went dark" rule for small sites (see the known limit above).
+- **Show each location's normal range** on its row (see "Known limit"), so a big drop marked "Normal" explains
+  itself.
+- Numbers per event type or outcome, after asking product.
+- Pre-computed daily totals, so the dashboard stays fast with much more data.
+- Tests against Postgres, not only SQLite.
+- A way to mark campaign or holiday weeks as expected.
 
 ## How it was built
 
-Spec-driven and AI-first. `PLAN.md` was written and frozen before any code; the decision log is
-`PLAN_first_iteration.md`. Each task was implemented by a builder agent on its own branch, checked by a reviewer
-agent (`.claude/agents/`), and reviewed and merged by a human as a GitHub PR. The AI interaction log is in `ai-log/`.
+1. **A first plan, written by hand** (`PLAN_first_iteration.md`): the questions to answer about the data, the
+   options for each decision, and the open points.
+2. **Refined with the AI as a challenger.** We used the AI to question the structure of that first plan, run the
+   data checks (`Data_integrity.md`) and the tuning (`Detection_tuning.md`), and fill the gaps. Every decision
+   was taken by a person. Several rounds produced the final plan (`PLAN.md`), frozen before any code.
+3. **Executed by four agents**, one task at a time, each task on its own branch and pull request:
+   - `api-builder` and `frontend-builder` implement a task from the plan;
+   - `api-reviewer` and `frontend-reviewer` check it against the plan and re-run it;
+   - a person reviews and merges each pull request.
 
-### Changes from the plan
+The agent definitions are in `.claude/agents/`, and the AI log is in `ai-log/`.
 
-`PLAN.md` stays frozen. `PLAN_CHANGES.md` records every change after Task 1:
-
-1. **Health test with a broken db (Task 7).** The test points the app at an unreachable database instead of a
-   dependency override, because `/health` no longer goes through that dependency.
-2. **Frontend dependencies (Task 8a).** Four required companion packages were added (`@types/react`,
-   `@types/react-dom`, `@testing-library/dom`, `@eslint/js`). TypeScript is pinned to 5.9.3, the newest version
-   that `openapi-typescript` and `typescript-eslint` both accept.
-3. **Task 11 skipped (Task 12).** The consolidated F1–F13 full-screen tests and the manual browser check were
-   skipped for time. Every F scenario is still covered by a Task 8–10 test; `PLAN_CHANGES.md` maps them and says
-   what was lost.
+**Changes from the plan:** we ran out of time, so we skipped one task: a final round of end-to-end tests of the
+full dashboard and a manual check in the browser. The individual parts are still tested. Details are in
+`PLAN_CHANGES.md`.
