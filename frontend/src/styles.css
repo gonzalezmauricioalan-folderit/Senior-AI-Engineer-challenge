@@ -104,3 +104,56 @@ body {
   white-space: nowrap;
   border: 0;
 }
+
+.locations {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* Wireframe: the title on the left, "needs attention first" pushed to the right edge. */
+.locations-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.locations-header h2 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.locations table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.locations th,
+.locations td {
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.locations thead th {
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+/* The row header is the location name: keep it looking like a cell, not a heading. */
+.locations tbody th {
+  font-weight: 400;
+}
+
+.locations .num {
+  text-align: right;
+}
+
+.tag {
+  margin-left: 8px;
+  padding: 1px 6px;
+  font-size: 0.75rem;
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning);
+  border-radius: 4px;
+}

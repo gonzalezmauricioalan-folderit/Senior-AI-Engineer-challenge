@@ -125,3 +125,58 @@ export const insightWithNotes = {
   ...insightS2,
   data_notes: [DUPLICATE_NOTE, UTC_NOTE],
 } satisfies WeeklyInsight;
+
+type Location = WeeklyInsight["locations"][number];
+
+/** A location row; the band is the S2-style `usual ± 0.56·usual` so fixtures stay short. */
+function loc(location: string, total: number, usual: number | null, pct: number | null, status: Location["status"], extra: Partial<Location> = {}): Location {
+  const lower = usual === null ? null : Math.max(0, usual - 11.2);
+  const upper = usual === null ? null : usual + 11.2;
+  return { location, total, usual, lower, upper, pct_vs_usual: pct, status, low_volume: false, history_weeks: usual === null ? 2 : 8, ...extra };
+}
+
+// S4: four locations with history [20]*8; week North 20, South 8, East 4, West 35. Locations in the
+// API's ranking (East, South, North, West); the account is still normal (67 vs usual 80, lower bound 57.6).
+export const insightS4 = {
+  ...insightS2,
+  account: { id: 105, name: "Four Sites", timezone: "America/Chicago" },
+  summary: { total: 67, usual: 80.0, lower: 57.6, upper: 102.4, pct_vs_usual: -0.1625, status: "normal", low_volume: false },
+  locations: [
+    loc("East", 4, 20.0, -0.8, "lower_than_usual"),
+    loc("South", 8, 20.0, -0.6, "lower_than_usual"),
+    loc("North", 20, 20.0, 0.0, "normal"),
+    loc("West", 35, 20.0, 0.75, "higher_than_usual"),
+  ],
+} satisfies WeeklyInsight;
+
+// R3: Old has full history; New has only 2 weeks, so no usual and no %, ranked last.
+export const insightNotEnoughRow = {
+  ...insightS2,
+  locations: [loc("Old", 20, 20.0, 0.0, "normal"), loc("New", 5, null, null, "not_enough_history")],
+} satisfies WeeklyInsight;
+
+// B5 at location level: usual 5, week 0 -> a row that carries the Low volume tag.
+export const insightLowVolumeRow = {
+  ...insightLowVolume,
+  locations: [loc("Main", 0, 5.0, -1.0, "normal", { lower: 0.0, upper: 12.0, low_volume: true })],
+} satisfies WeeklyInsight;
+
+// Deliberately neither alphabetical nor sorted by %: proves the UI keeps the API order.
+export const insightUnsortedRows = {
+  ...insightS2,
+  locations: [
+    loc("Site K", 10, 10.0, 0.0, "normal"),
+    loc("Site B", 13, 10.0, 0.3, "higher_than_usual"),
+    loc("Site Z", 5, 10.0, -0.5, "lower_than_usual"),
+    loc("Site A", 9, 10.0, -0.1, "normal"),
+  ],
+} satisfies WeeklyInsight;
+
+// Real locations have fractional usuals (seed: 4.5, 3.5); the table must round them like the card does.
+export const insightFractionalUsual = {
+  ...insightS2,
+  locations: [
+    loc("Half", 5, 4.5, 0.11, "normal"),
+    loc("Low", 3, 3.4, -0.12, "normal"),
+  ],
+} satisfies WeeklyInsight;
