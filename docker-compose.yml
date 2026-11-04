@@ -15,5 +15,26 @@ services:
       timeout: 3s
       retries: 30
 
+  api:
+    # Context is the repo root so the image can include data/seed.sql (see backend/Dockerfile).
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy # entrypoint runs migrations immediately, so db must accept connections
+    environment:
+      # Inside the compose network the db is reachable as `db:5432` (not localhost / POSTGRES_PORT).
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-relay}:${POSTGRES_PASSWORD:-relay}@db:5432/${POSTGRES_DB:-relay}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      # python urllib because the slim image has no curl; non-2xx makes urlopen raise -> exit 1.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
 volumes:
   pgdata:

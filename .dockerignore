@@ -1,0 +1,12 @@
+# Keep the build context (repo root, see backend/Dockerfile) small and free of local-only files.
+.git
+.pr/
+ai-log/
+relay-analytics-starter/
+.env
+.env.*
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+frontend/node_modules/
