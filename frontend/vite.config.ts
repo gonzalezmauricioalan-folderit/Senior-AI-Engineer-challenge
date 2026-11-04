@@ -15,5 +15,8 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     // Explicit imports from "vitest" in tests instead of implicit globals: keeps tsconfig free of vitest types.
     globals: false,
+    // The first test of a file pays for importing React + Recharts + MSW and two mocked round trips;
+    // under load that passed the 5s default. Tests still finish as soon as the UI is ready (asyncUtilTimeout in setup.ts).
+    testTimeout: 20000,
   },
 });
