@@ -34,11 +34,13 @@ uv pip install --python .venv/bin/python -r requirements-dev.txt
 .venv/bin/pytest -q tests/integration/test_health.py::test_health_ok   # a single test
 ```
 
-## Full stack in Docker (db + api)
+## Full stack in Docker (db + api + web)
 
 ```bash
-docker compose up -d --build --wait                    # db + api; the api container migrates and seeds itself, then serves :8000
+docker compose up -d --build --wait                    # db + api + web; the api container migrates and seeds itself (:8000), nginx serves the dashboard (:8080)
 curl -s localhost:8000/health
+curl -s -o /dev/null -w "%{http_code}\n" localhost:8080   # dashboard (VITE_API_URL=http://localhost:8000 is baked in at image build)
+docker compose up -d --wait db                         # db only (for local backend work)
 backend/.venv/bin/python scripts/export_openapi.py     # regenerate openapi.json (the committed contract; a test fails if stale)
 ```
 

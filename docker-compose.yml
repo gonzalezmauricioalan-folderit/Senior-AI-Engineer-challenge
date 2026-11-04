@@ -36,5 +36,25 @@ services:
       retries: 20
       start_period: 10s
 
+  web:
+    # Context is frontend/ (its own .dockerignore applies; it needs nothing from the repo root).
+    build:
+      context: frontend
+      args:
+        # Baked into the bundle at build time; the browser (on the host) calls the api, so localhost, not `api`.
+        VITE_API_URL: http://localhost:${API_PORT:-8000}
+    depends_on:
+      api:
+        condition: service_healthy # no point serving a dashboard whose API is not answering yet
+    ports:
+      - "8080:80" # fixed: the api CORS default only allows http://localhost:8080
+    healthcheck:
+      # busybox wget ships with nginx:alpine (no curl); fails on non-2xx. 127.0.0.1, not localhost:
+      # localhost resolves to ::1 first and nginx.conf listens on IPv4 only.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
 volumes:
   pgdata:

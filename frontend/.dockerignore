@@ -1,0 +1,10 @@
+# Keep host artifacts out of the build context: node_modules would shadow the image's `npm ci`,
+# and dist is rebuilt inside the image.
+node_modules
+dist
+.git
+.env
+.env.*
+*.log
+Dockerfile
+.dockerignore
