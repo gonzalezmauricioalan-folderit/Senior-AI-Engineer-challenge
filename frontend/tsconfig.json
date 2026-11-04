@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    // Strict is required by the task rules ("TypeScript strict, no any").
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    // "bundler" resolution matches how Vite resolves imports (no .js extensions needed in source).
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    // Vite compiles; tsc only type-checks (`npm run build` runs `tsc --noEmit` first).
+    "noEmit": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    // Gives `import.meta.env.VITE_API_URL` its type.
+    "types": ["vite/client"]
+  },
+  "include": ["src", "vite.config.ts"]
+}

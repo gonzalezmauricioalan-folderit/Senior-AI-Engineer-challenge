@@ -1,0 +1,54 @@
+:root {
+  /* Status colours from PLAN.md 3.7; always paired with an icon and text, never colour alone. */
+  --color-lower: #b42318;
+  --color-higher: #1d4ed8;
+  --color-normal: #15803d;
+  --color-muted: #6b7280;
+  --color-border: #e5e7eb;
+  --color-bg: #ffffff;
+  --color-text: #111827;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+body {
+  margin: 0;
+}
+
+/* Single column, max 960px (PLAN.md 3.7). */
+.app {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.app h1 {
+  font-size: 1.25rem;
+  margin: 0 0 16px;
+}
+
+.pickers {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.picker-row > label {
+  width: 4.5rem;
+}
+
+.muted {
+  color: var(--color-muted);
+}
+
+.state-message {
+  padding: 24px 0;
+}
