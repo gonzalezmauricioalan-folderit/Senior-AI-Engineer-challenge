@@ -25,6 +25,20 @@ export const accounts = [
     industry: "spa",
     timezone: "UTC",
     location_count: 0,
+    // The real API returns the dataset-wide as-of week even for an account without events.
+    latest_complete_week: "2026-07-20",
+  },
+] satisfies Account[];
+
+// Empty-dataset variant: the only case where latest_complete_week is null. Tests that need it
+// override the /accounts handler with this list.
+export const accountsEmptyDataset = [
+  {
+    id: 20,
+    name: "Quiet Harbor Spa",
+    industry: "spa",
+    timezone: "UTC",
+    location_count: 0,
     latest_complete_week: null,
   },
 ] satisfies Account[];
