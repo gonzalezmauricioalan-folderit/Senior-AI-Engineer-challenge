@@ -131,3 +131,9 @@ def test_extra_oldest_history_week_counts_in_the_mad(client: TestClient, conn: C
     s = _get(client, 130)["summary"]
     assert (s["usual"], s["lower"], s["upper"]) == (100.0, 25.9, 174.1)
     assert s["status"] == "higher_than_usual"
+
+
+def test_extra_daily_usual_keeps_its_half(client: TestClient, conn: Connection) -> None:
+    """Not a scenario id: Monday history alternates 20/21; the daily usual 20.5 must keep its half."""
+    _series(conn, 131, [20, 21, 20, 21, 20, 21, 20, 21], 20)
+    assert _get(client, 131)["days"][0]["usual"] == 20.5
