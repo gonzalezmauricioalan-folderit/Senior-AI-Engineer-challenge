@@ -23,7 +23,7 @@ const NOT_ENOUGH = "Not enough history yet — at least 4 complete weeks are nee
 const LOW_VOLUME = "This account has low weekly volume, so results may be unreliable.";
 
 describe("F1 account without events (card and chart)", () => {
-  it("shows the not-enough-history card and a chart with 7 zero bars", async () => {
+  it("shows the not-enough-history card, 7 day labels, no bar rectangles and 7 `0 events` entries", async () => {
     serve(insightS1);
     render(<App />);
 
@@ -84,6 +84,29 @@ describe("F2 normal week", () => {
 
     expect(await screen.findByText("5 events · usual — (range —) · —")).toBeInTheDocument();
     expect(screen.queryByText(/null/)).not.toBeInTheDocument();
+  });
+});
+
+describe("singular event count", () => {
+  it("reads '1 event' on the card and in the hidden day summary, and '2 events' otherwise", async () => {
+    serve({
+      ...insightS3a,
+      summary: { ...insightS3a.summary, total: 1 },
+      days: insightS3a.days.map((d, i) => ({ ...d, total: i === 0 ? 1 : i === 1 ? 2 : 0 })),
+    });
+    render(<App />);
+
+    const card = await screen.findByRole("region", { name: "Verdict" });
+    expect(within(card).getByText(/^1 event · usual/)).toBeInTheDocument();
+    expect(screen.getByText("Mon: 1 event, usual 3")).toBeInTheDocument();
+    expect(screen.getByText("Tue: 2 events, usual 3")).toBeInTheDocument();
+    expect(screen.getByText("Wed: 0 events, usual 3")).toBeInTheDocument();
+  });
+
+  it("reads '1 event' on the not-enough-history card", async () => {
+    serve({ ...insightS1, summary: { ...insightS1.summary, total: 1 } });
+    render(<App />);
+    expect(await screen.findByText("1 event")).toBeInTheDocument();
   });
 });
 

@@ -1,5 +1,6 @@
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, XAxis, YAxis } from "recharts";
 import type { Day } from "../api/types";
+import { formatEvents } from "../format";
 
 interface Props {
   days: Day[];
@@ -37,7 +38,7 @@ export default function DailyChart({ days }: Props) {
       <ul className="visually-hidden" aria-label="Daily totals">
         {days.map((d) => (
           <li key={d.date}>
-            {d.weekday}: {d.total} events, usual {d.usual === null ? "—" : d.usual}
+            {d.weekday}: {formatEvents(d.total)}, usual {d.usual === null ? "—" : d.usual}
           </li>
         ))}
       </ul>

@@ -1,5 +1,5 @@
 import type { Metric, WeeklyInsight } from "../api/types";
-import { formatNumber, formatPct } from "../format";
+import { formatEvents, formatNumber, formatPct } from "../format";
 import StatusBadge from "./StatusBadge";
 
 interface Props {
@@ -24,13 +24,13 @@ export default function VerdictCard({ summary, baseline }: Props) {
       </p>
       {notEnough ? (
         <>
-          <p>{total} events</p>
+          <p>{formatEvents(total)}</p>
           <p className="muted">{NOT_ENOUGH_HISTORY_COPY}</p>
         </>
       ) : (
         <>
           <p>
-            {total} events · usual {usualText} (range {rangeText}) · {formatPct(pct_vs_usual)}
+            {formatEvents(total)} · usual {usualText} (range {rangeText}) · {formatPct(pct_vs_usual)}
           </p>
           <p className="muted">vs. previous {baseline.weeks_used} weeks</p>
         </>
