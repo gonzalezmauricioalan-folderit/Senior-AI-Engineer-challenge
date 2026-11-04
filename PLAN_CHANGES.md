@@ -57,3 +57,6 @@ why, and which PR introduced it.
   and 10 reviewers only did curl/API-level live checks, so no one has looked at the rendered dashboard in a real
   browser against the seeded API.
 - **PR:** Task 12 (`task/12-web-container`).
+- **Update (after Task 12):** the human checked the rendered dashboard by hand in a browser against the seeded
+  stack (`docker compose up`) during the final review. That check found the "−69% but Normal" row described in the
+  README's "Known limit". The consolidated F1-F13 test file is still not written.
