@@ -1,0 +1,3231 @@
+ ▐▛███▛█   Claude Code v2.1.317
+▝▜██████▀  Opus 5.5 · Claude Pro
+ ▝▝   ▝▝   /home/admin123/projects/qualitra_challenge
+
+▎ [✻] [✻] [✻] · Share Claude Code and earn $10 in usage credits · /passes
+
+❯ /clear                                                                        
+
+❯ read @PLAN.md and start with task number 1                                    
+  ⎿  Read PLAN.md (606 lines)
+
+● Per PLAN.md §1, I'm the orchestrator here, so I'll hand Task 1 to api-builder
+  and send the result to api-reviewer afterwards.
+
+● api-builder(Implement PLAN.md Task 1)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● I've started the api-builder agent on Task 1. It's building the API skeleton,
+  the migration for the deduplicated view (clean_activity_events), the /health
+  endpoint and the test harness, on a new local branch called
+  task/1-api-skeleton. It's still running in the background.
+
+  When it finishes, I'll pass you its report and start api-reviewer on the same
+  branch. After the review, you run .pr/1/create-pr.sh on the host to push the
+  branch and open the PR.
+
+✻ Crunched for 17s · done Tuesday 7:35 PM
+
+● Agent "Implement PLAN.md Task 1" finished · 2m 4s
+
+● The builder has finished. Next I'll run the reviewer on the same branch, and
+  I'll point it at two things I want checked.
+
+● api-reviewer(Review PLAN.md Task 1 branch)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● The builder has finished Task 1, and api-reviewer is now checking it. The work
+  is one local commit on the branch task/1-api-skeleton, and nothing has been
+  pushed.
+
+  Builder's results
+  - Linting and formatting (ruff) pass, and all 4 tests pass.
+  - Migration 0002 is applied, and the deduplicated view (clean_activity_events)
+    holds 12,614 rows, as the plan expects.
+  - /health returns {"status":"ok","db":"ok"}, and the CORS header is set.
+  - The change is 322 lines, under the 700 limit.
+  - New dependencies, pinned to exact versions: fastapi 0.162.0,
+    uvicorn[standard] 0.54.0, pytest 9.2.0, httpx 0.28.1, ruff 0.17.3.
+  - CLAUDE.md now has the commands to run the API, lint, run all tests, run a
+    single test, and run only the fast tests.
+
+  Decisions the builder made that the plan didn't specify
+  - Lint rules are limited to E,F,I.
+  - /health returns plain JSON for now, because the Health response model
+    belongs to Task 3.
+  - The DB engine is stored on app.state.
+  - The test conn fixture commits each write immediately (autocommit mode).
+  - It added empty __init__.py files so the tests can import the factories.
+
+  What I asked the reviewer to check
+  - The formatter changed two existing files: the formatter (ruff format) also
+    rewrapped env.py and the already-applied 0001_initial_schema.py migration.
+    The reviewer will confirm those changes are whitespace only.
+  - The test harness matches the plan: the factories and fixtures follow PLAN.md
+    3.6 exactly, including Monday events, naive UTC timestamps and ids starting
+    at 1,000,000.
+  - The 503 response: when the DB is down, /health returns 503
+    {"status":"error","db":"error"}.
+
+  One for you to decide later (not blocking): Starlette now warns that using
+  httpx with TestClient is deprecated in favour of httpx2. PLAN.md lists httpx,
+  so the builder kept it.
+
+  The reviewer will write .pr/1/review.md. Once it approves, you run
+  .pr/1/create-pr.sh on the host to push the branch and open the PR.
+
+✻ Sautéed for 20s · done Tuesday 7:37 PM
+
+● Agent "Review PLAN.md Task 1 branch" finished · 1m 4s
+
+● Per the workflow, the blocking finding goes back to the builder to fix on the
+  same branch.
+  ⎿  Resuming agent a6ba5b2
+
+● The reviewer requested changes on Task 1, and I've sent the builder back to
+  fix them on the same branch.
+
+  The blocking finding: when the database is down, /health returns 500 instead
+  of the planned 503 {"status":"error","db":"error"}. The connection is opened
+  in the shared get_connection dependency (app/db.py:10), before the handler's
+  try/except (app/routes.py:17-21) runs. So only a failing ping is caught; a
+  failed connection isn't. The reviewer saw the 500 both with the compose
+  database stopped and with a test client pointed at a bad URL.
+
+  What I asked the builder to change:
+  - /health will open its own connection inside the try.
+  - A new fast test will point the app at an unreachable SQLite path and check
+    for the exact 503 response.
+  - get_connection stays as it is for the endpoints in later tasks.
+
+  Everything else passed review:
+  - Lint and format checks, tests, migration and the 12,614-row view count are
+    all fine.
+  - The test factories and fixtures match the plan.
+  - The migration 0002 SQL matches the plan exactly.
+  - The reformat of the existing 0001_initial_schema migration is whitespace
+    only, so it's safe.
+  - None of the builder's own decisions conflict with the plan.
+
+  After the fix lands, I'll run the reviewer again; its new review replaces
+  .pr/1/review.md. Then you can run .pr/1/create-pr.sh on the host.
+
+✻ Churned for 12s · done Tuesday 7:39 PM
+
+● Agent "Implement PLAN.md Task 1" finished · 37s
+  ⎿  Resuming agent aaaab6a
+
+● The builder fixed the blocking finding, and the reviewer is now checking it
+  again.
+
+  What changed:
+  - /health now gets the engine from request.app.state, and both opening the
+    connection and the ping happen inside the try. So when the database can't be
+    reached, it returns 503 {"status":"error","db":"error"} instead of 500.
+  - get_connection, the shared database dependency the later endpoints will use,
+    is unchanged.
+  - A new fast test, test_health_db_unreachable_returns_503, points the app at a
+    SQLite file in a directory that doesn't exist and checks for the exact 503
+    response.
+  - The builder re-ran the Quickstart and everything passed: ruff is clean, all
+    5 tests pass, the deduplicated view has 12,614 rows, and /health returns ok
+    against the running database.
+  - The change is now 339 lines, under the 700 limit. The fix is a second commit
+    on task/1-api-skeleton, nothing has been pushed, and .pr/1/pr-body.md has
+    been updated.
+
+  The reviewer will also stop the compose database to confirm the 503 against
+  Postgres, then write a new .pr/1/review.md. I'll tell you once it approves,
+  and then you can run .pr/1/create-pr.sh on the host.
+
+✻ Cooked for 10s · done Tuesday 7:39 PM
+
+● Agent "Review PLAN.md Task 1 branch" finished · 56s
+
+● The reviewer approved. Before handing over, I'll check its one nit: the PR
+  body may still show the old numbers.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● The reviewer approved Task 1, and it's ready for you to open the PR. On the
+  host, from the repo root, run:
+
+  .pr/1/create-pr.sh
+
+  That pushes task/1-api-skeleton, opens the PR using .pr/1/pr-body.md, and
+  posts .pr/1/review.md as a comment.
+
+  - Branch contents: two local commits, 13cc8ab (the skeleton: /health, the
+    deduplicated view and the test harness) and b21eaa9 (the fix that makes
+    /health return 503 when the database is down).
+  - Checks: the reviewer re-ran the Quickstart and everything passed. That's
+    lint, 5 tests and the 12,614-row clean view on Postgres. With the database
+    stopped, /health returned 503 {"status":"error","db":"error"}; after a
+    restart it returned 200 ok.
+  - Size: 339 changed lines, under the 700 limit.
+  - The reviewer's nit: it said the PR body still showed the old numbers. I
+    checked, and it was already updated: 5 passed, 339 lines.
+
+  What the review taught us for the agent definitions. After your review on
+  GitHub, I'll propose concrete edits to .claude/agents/*.md and record this
+  round in ai-log/notes.md. One edit is already clear: the builder tested
+  /health only for the case where ping fails, so it missed a failed connection,
+  which is raised before the handler's try/except. I'd add a rule to
+  api-builder.md: for any error path in the plan, test the real failure (an
+  unreachable DB, a missing row), not just a mocked function that raises.
+
+  Once you've merged and run git checkout main && git pull on the host, tell me
+  and I'll start Task 2 (the "is this week normal?" logic).
+
+✻ Baked for 5m 32s · done Tuesday 7:40 PM
+
+❯ this is to criptic backend/pyproject.toml add comments                        
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Write(backend/pyproject.toml)
+  ⎿  Added 20 lines, removed 4 lines
+       1 +# Tool configuration for the backend (no packaging metadata: th
+         +e app runs from source).                                       
+       2 +# Dependencies are pinned in requirements.txt / requirements-de
+         +v.txt, not here.                                               
+       3 +                                                               
+       4 +# --- Ruff: linter + formatter --------------------------------
+         +-----------------                                              
+       5 +# Lint:   .venv/bin/ruff check .                               
+       6 +# Format: .venv/bin/ruff format .   (CI-style check: ruff forma
+         +t --check .)                                                   
+       7  [tool.ruff]
+       2 -line-length = 110                                              
+       3 -target-version = "py313"                                       
+       4 -extend-exclude = [".venv"]                                     
+       8 +line-length = 110          # PLAN.md 3.2: wider than the 88 def
+         +ault, fits SQL strings and test tables                         
+       9 +target-version = "py313"   # matches the python:3.13 runtime, s
+         +o ruff allows 3.13 syntax                                      
+      10 +extend-exclude = [".venv"] # never lint/format the virtualenv  
+      11  
+      12  [tool.ruff.lint]
+      13 +# Rule sets kept deliberately small (the plan doesn't name any)
+         +:                                                              
+      14 +#   E = pycodestyle errors (style problems)                    
+      15 +#   F = pyflakes (unused imports/variables, undefined names: re
+         +al bugs)                                                       
+      16 +#   I = isort (import ordering, auto-fixable with `ruff check -
+         +-fix`)                                                         
+      17  select = ["E", "F", "I"]
+      18  
+      19 +# --- Pytest --------------------------------------------------
+         +-----------------                                              
+      20 +# All tests:   .venv/bin/pytest -q                             
+      21 +# Fast loop:   .venv/bin/pytest -q -m "not slow"               
+      22 +# One test:    .venv/bin/pytest -q tests/integration/test_healt
+         +h.py::test_health_ok                                           
+      23  [tool.pytest.ini_options]
+      10 -testpaths = ["tests"]                                          
+      24 +testpaths = ["tests"]  # only collect from tests/, so a bare `p
+         +ytest` doesn't wander into .venv or migrations                 
+      25 +# Custom markers must be declared, or pytest warns. `slow` = te
+         +sts that load the real                                         
+      26 +# seed (data/seed.sql, ~12.6k rows) into SQLite; everything els
+         +e uses small fake data.                                        
+      27  markers = ["slow: tests that load the full seed (deselect with 
+          -m 'not slow')"]
+
+  Ran 3 shell commands (ctrl+o to expand)
+
+● I've added comments throughout backend/pyproject.toml and committed them to
+  the Task 1 branch as 820b29f.
+
+  The comments cover:
+  - File purpose: this file only configures tools. Dependencies stay pinned in
+    the requirements*.txt files.
+  - Ruff: what each setting does and why, including the 110-character line
+    length from PLAN.md, the target of Python 3.13 and excluding .venv. There is
+    also a key to the lint rule sets: E is style errors, F is real bugs such as
+    unused or undefined names, and I is import order.
+  - Pytest: why tests are only collected from tests/, and what the slow marker
+    means (tests that load the real seed).
+  - Commands: next to each section are the commands for linting, formatting,
+    running all tests, the fast tests and a single test.
+
+  Lint, the format check and all 5 tests still pass. The branch's diff is now
+  355 lines, and I've updated that number in .pr/1/pr-body.md.
+
+  You haven't opened the PR yet, so .pr/1/create-pr.sh will push this commit
+  along with the rest. If you already pushed, run the script again to push the
+  new commit.
+
+✻ Crunched for 32s · done Tuesday 7:48 PM
+❯ something usfull to change/modify/add to the existing agents?                 
+
+  Read 1 file (ctrl+o to expand)
+
+● Yes. This round turned up four changes worth making, based on what the review
+  caught and on your pyproject comment.
+
+  1. Builders test the real failure, not a stand-in (api-builder,
+  frontend-builder). This is what the review caught. The builder treated "ping
+  raises" as the same thing as "DB is down", so the real outage gave a 500. Rule
+  to add: "For every error response in the plan, make the real failure happen 
+  in a test (an unreachable DB, a missing row, bad input). Don't settle for a 
+  mocked function that raises." For the frontend, this means a real MSW 500 or a
+  network error.
+
+  2. Builders comment config and non-obvious code (both builders). This is your 
+  pyproject feedback. Rule to add: "Config files (pyproject, 
+  vite/eslint/tsconfig, Dockerfile, compose) and non-obvious code get short 
+  comments that explain why, not what. Point to the PLAN.md section when a value
+  comes from the plan." This will matter even more in Tasks 5, 8 and 12, which
+  are mostly config.
+
+  3. Reviewers trigger error paths themselves (api-reviewer, frontend-reviewer).
+  The reviewer caught the 503 bug only because it stopped the DB on its own
+  initiative. Making that part of the checklist means it happens on every task:
+  "For each error path, cause it for real at least once (stop the db, send a bad
+  week_start, an unknown id) and record the status code and body you got." I'd
+  also add a check for comments on config files (see item 2).
+
+  4. Builders report test warnings (api-builder, and the same for
+  frontend-builder). pytest currently shows 5 warnings: the httpx deprecation,
+  and Alembic's missing path_separator, which takes one line in alembic.ini to
+  fix. Rule to add: "List new warnings under Follow-ups. Fix them if it's 
+  trivial and inside the task's scope."
+
+  I'd skip one possible rule. The formatter reformatted migration 0001, but the
+  builder listed it and the reviewer confirmed it's whitespace only. That
+  already works under the current rules, so it doesn't need its own rule.
+
+  I'd apply all four. Each one adds one or two lines per agent file, and the
+  frontend agents get the matching version. Should I make the edits and commit
+  them? I'd commit on a separate branch, task/0b-agents, so they don't end up in
+  the Task 1 PR. Also say if you want to drop or reword any of them.
+
+✻ Worked for 18s · done Tuesday 7:51 PM
+
+❯ For now keep that information in your memory. i merged,check out to main and  
+  ddid a pull. conitinue with task 2                                            
+
+  Ran 2 shell commands, wrote 2 memories (ctrl+o to expand)
+
+● Memory is saved, and main is at the merge of PR #2. I'm starting Task 2 now.
+
+● api-builder(Implement PLAN.md Task 2)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● I've saved the four agent improvements to memory without changing the agent
+  files, and Task 2 is now running.
+
+  Saved to memory
+  - The four proposals: tests that cause the real failure, comments on config
+    files, reviewers triggering error paths themselves, and reporting test
+    warnings. I'll bring them up again after a later review, and when you want
+    them applied they'll go on their own branch.
+  - Your preference: you want commented config files instead of terse ones, so
+    every builder prompt will now ask for that.
+
+  Main: I checked out main. It's clean and at 3fca500, the merge of PR #2.
+
+  Task 2: api-builder is working on the branch task/2-domain-logic. The task is
+  the plain-Python "is this week normal?" logic in weeks.py, detection.py and
+  ranking.py, plus small unit tests. For now I've added two of the parked rules
+  to its prompt by hand:
+  - Each module gets a docstring, and the non-obvious rules get comments that
+    explain why, citing PLAN.md.
+  - Every test assertion has to be one that can actually fail.
+
+  When it finishes, I'll run api-reviewer on the branch and tell you the result.
+
+✻ Brewed for 36s · done Tuesday 7:54 PM
+
+● Agent "Implement PLAN.md Task 2" finished · 1m 37s
+
+● api-reviewer(Review PLAN.md Task 2 branch)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● The builder has finished Task 2, and api-reviewer is now checking it.
+
+  Builder's result: one local commit on the branch task/2-domain-logic; nothing
+  has been pushed.
+  - Checks: lint and the format check pass, the 12 unit tests pass, and the full
+    suite of 17 tests passes.
+  - Line count: 325, under the 700 limit.
+  - Tests: they check exact numbers and the exact ranked order. As a test of the
+    tests, the builder removed the √usual floor, and two tests failed.
+  - Comments: every module has a docstring, and the non-obvious rules have
+    comments explaining why, each citing a PLAN.md section.
+  - Decisions taken:
+    - local_date marks the input explicitly as UTC before converting it.
+    - weekday_usuals returns 7 nulls when there is no history.
+    - 1.4826 is a named constant, MAD_SCALE.
+    - The ranking's sort key falls back with pct or 0.0.
+  - Warnings: the two from Task 1 are still there (Alembic path_separator and
+    the httpx deprecation in TestClient). They're listed under Follow-ups, and
+    nothing new was added.
+
+  What I asked the reviewer to look at:
+  - Detection: compare evaluate with the plan's pseudocode line by line.
+  - Math by hand: work S2, B3/B4, B6 and B8 through the code.
+  - Weeks and history: check the history window boundaries, and that the
+    evaluated week is never in its own history.
+  - Ranking fallback: whether pct or 0.0 can ever change the order of a real
+    "lower" item. I expect it can't, because with usual = 0 a week can never be
+    flagged lower.
+  - Mutation spot-checks: change a constant or a < vs ≤ in a scratch copy, and
+    confirm the tests catch it.
+  - Comments: check that none of them contradict the code or the plan.
+
+  I'll pass on the verdict when the review is done.
+
+✻ Sautéed for 20s · done Tuesday 7:56 PM
+
+● Agent "Review PLAN.md Task 2 branch" finished · 1m 39s
+
+● The reviewer approved, but it found five rules that no current test checks.
+  Adding a few small unit tests now is cheaper than finding those gaps later:
+  none of the S/B/R scenarios in section 4 use usual = 6 or a spread driven by
+  MAD. So I'm sending the builder back to add them.
+  ⎿  Resuming agent a16aea5
+
+● The reviewer approved Task 2 with no blocking findings, but its mutation
+  testing found gaps in the tests. Before you open the PR, I've sent the builder
+  back to add a few small unit tests.
+
+  What passed:
+  - Checks: lint, the format check and all 17 tests pass. The line count is 325.
+  - Detection: evaluate matches the plan's pseudocode line by line.
+  - Math by hand: the reviewer worked S2, S3, B1–B6, B8 and R1 through the code,
+    and every result matched the plan.
+  - Ranking: the pct or 0.0 fallback can never reorder a real "lower" location,
+    because a lower item always has usual > 0.
+  - Comments: they're accurate and none contradicts the plan.
+
+  What the tests don't catch yet. The reviewer changed the code one rule at a
+  time in a scratch copy, and these changes still passed every test:
+  - removing the 1.4826 factor (no test has a spread large enough that the MAD
+    sets it);
+  - the low-volume cutoff at usual = 6, changed to 5 or from ≤ to <;
+  - |pct| ≥ 20% changed to > 20%;
+  - series_start when the first event falls exactly in the first complete week;
+  - the nit: nothing tests the 8-week cap on the history window.
+
+  I've asked the builder for one test per gap, without changing any app code.
+  For the 20% case there is an exact example: history 200×8 with this week at
+  240 gives exactly +20%, which is above the upper bound of 235.4. When it's
+  done, I'll check that the new tests pass on the current code. Then the PR is
+  ready for .pr/2/create-pr.sh.
+
+✻ Cooked for 20s · done Tuesday 7:57 PM
+
+● Agent "Implement PLAN.md Task 2" finished · 47s
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Task 2 is ready for you to open the PR. On the host, from the repo root, run:
+
+  .pr/2/create-pr.sh
+
+  That pushes task/2-domain-logic, opens the PR using .pr/2/pr-body.md, and
+  posts .pr/2/review.md as a comment.
+
+  The branch has two local commits:
+  - 74751e6: the domain logic in weeks.py, detection.py and ranking.py, plus the
+    unit tests. The reviewer approved it.
+  - 7801c61: new tests for the gaps the reviewer found by changing the code in a
+    scratch copy. I confirmed this commit only touches test files (+34/−1 in
+    test_detection.py and test_weeks.py). Each code change the reviewer tried
+    now fails at least one test:
+    - removing the 1.4826 factor
+    - the low-volume cutoff at usual = 6
+    - exactly +20% being flagged
+    - a series that starts exactly in the first complete week
+
+  I re-ran the checks on the branch myself: lint and the format check pass, all
+  25 tests pass, and the PR is 358 changed lines. I added a short follow-up note
+  to .pr/2/review.md saying the gaps were closed in 7801c61, so the PR comment
+  shows it.
+
+  This round gave one more possible agent improvement, and I've parked it with
+  the other four: reviewers should routinely check the tests by changing the
+  code in a scratch copy, as this one did when I asked. That's how these gaps
+  were found.
+
+  Once you've merged and pulled main, tell me and I'll start Task 3: the
+  repository, schemas, seed loader and GET /accounts.
+
+✻ Cogitated for 5m 19s · done Tuesday 7:58 PM
+
+❯ show me an ascii diagram for backend/app/domain/detection.py i will decide if 
+  add that to documentation or not. The logic is not complex but need           
+  something visual to explain it with a few examples                            
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Here's a diagram of evaluate() in backend/app/domain/detection.py, with
+  examples worked from the code's own constants. It's plain text, so it can go
+  straight into the README or a docs/ file if you decide to keep it.
+
+                          evaluate(value, history)
+                                    │
+                                    ▼
+                   ┌─────────────────────────────────┐
+                   │ fewer than 4 history weeks?     │── yes ──▶  ○ NOT ENOUGH 
+  HISTORY
+                   └─────────────────────────────────┘           (usual/band/pct
+  = null)
+                                    │ no
+                                    ▼
+    ┌─────────────────────────────────────────────────────────────────────┐
+    │ 1. BASELINE                                                         │
+    │    usual  = median(history)            ← a single spike can't move it│
+    │    MAD    = median(|week − usual|)     ← "typical wobble"           │
+    │    spread = max(1.4826 × MAD , √usual) ← never narrower than chance │
+    │                                                                     │
+    │ 2. BAND        lower = max(0, usual − 2.5 × spread)                 │
+    │                upper =        usual + 2.5 × spread                  │
+    └─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+    ┌─────────────────────────────────────────────────────────────────────┐
+    │ 3. THREE GUARDS: all must pass to raise a flag                      │
+    │                                                                     │
+    │    a) outside the band?        value < lower  or  value > upper     │
+    │    b) big enough in events?    |value − usual| ≥ 3                  │
+    │    c) big enough in percent?   |pct| ≥ 20%                          │
+    │                                (if usual = 0: just "value > 0")      │
+    └─────────────────────────────────────────────────────────────────────┘
+                   │ all pass                         │ any fails
+                   ▼                                  ▼
+       value > usual ? ▲ HIGHER                   ● NORMAL
+                     : ▼ LOWER
+
+       separately: low_volume = (usual ≤ 6)  → UI warns "results may be 
+  unreliable"
+
+  What the band looks like
+
+          ▼ LOWER          ● NORMAL (inside the band)          ▲ HIGHER
+     ─────────────────┼────────────────────┬───────────────────┼──────────────▶ 
+  events
+                    lower                 usual              upper
+                      └──── 2.5 × spread ──┴── 2.5 × spread ────┘
+
+  Example 1: a typical account (scenarios S2/S3)
+  History: 20 22 18 21 19 20 23 17. The median is 20, and the MAD is 1.5 (×
+  1.4826 = 2.2). The √20 floor of 4.47 is larger, so the spread is 4.47 and the
+  band is 8.8 – 31.2.
+
+        0    5         8.8              20  21           31.2         40
+        ├────●─────────┼────────────────●───●────────────┼────────────●───▶
+             │                              │                         │
+             week = 5                       week = 21                 week = 40
+             ▼ LOWER −75%                   ● NORMAL +5%              ▲ HIGHER 
+  +100%
+
+  Example 2: a one-off spike in the history doesn't distort later weeks (R1)
+  History: 20 20 20 300 20 20 20 20
+
+     mean   = 55       → band would be huge, and a drop to 5 might look "normal"
+     median = 20, MAD = 0 → floor √20 → same band 8.8 – 31.2 as Example 1
+     week = 20 → ● NORMAL        week = 5 → ▼ LOWER
+
+  This is the case from the seed data: account 6 had a one-day spike of 805
+  events on 2026-06-03, and the weeks after it are still judged against a normal
+  baseline.
+
+  Example 3: why the 20% guard exists (B6/B7)
+  History: 200 × 8. The MAD is 0, so the √200 floor gives a spread of 14.1 and a
+  band of 164.6 – 235.4.
+
+                                      235.4
+     ──────────────────── 200 ─────────┼──●─────●─────▶
+                                          236   241
+     236: outside the band, but only +18%  → guard c fails → ● NORMAL
+     241: outside the band, +20.5%         → all pass      → ▲ HIGHER
+
+  For a large account, a band based only on noise is tight, so the 20% guard
+  stops small but statistically "significant" changes from raising a flag.
+
+  Example 4: a usual of zero (B3/B4)
+  History: 0 × 8, so usual is 0, the band is [0, 0] and there's no percentage.
+
+     week = 2 → outside the band, but only 2 events (< 3)  → ● NORMAL
+     week = 3 → outside, 3 events, value > 0               → ▲ HIGHER  (pct 
+  shown as "—")
+
+  Example 5: when the MAD sets the spread (a volatile account)
+  History: 100 100 100 100 120 120 120 120. The median is 110 and the MAD is 10,
+  so 1.4826 × 10 = 14.8. That's larger than √110 = 10.5, so the spread is 14.8
+  and the band is 72.9 – 147.1.
+
+  This account's normal wobble is bigger than chance alone, so the band widens
+  to match. A quiet, steady account gets a tighter band.
+
+  Example 6: low volume (B5)
+  History: 5 × 8. The spread is √5 = 2.24, so the lower bound is 5 − 5.6, which
+  is clamped to 0. A week of 0 is not below 0, so the result is ● NORMAL, with
+  low_volume = true. At this volume even a drop to zero can't be told apart from
+  noise, and the UI says so.
+
+  If you want it in the docs, I'd put it in the README section "Interpretation
+  of the ticket and how normal is defined" in Task 13, next to the reasoning
+  from Detection_tuning.md. A short version (the flow plus Examples 1 and 2)
+  would also fit as the docstring of detection.py. I haven't added it to any
+  file. Tell me where you want it, if anywhere.
+
+✻ Crunched for 29s · done Tuesday 8:12 PM
+
+❯ add the short version as the detection.py docstring                           
+
+● Update(backend/app/domain/detection.py)
+  ⎿  Added 35 lines
+       2  
+       3  The pseudocode in PLAN.md is authoritative; constants live here
+          . Values are returned unrounded:
+       4  rounding is the service's job.
+       5 +                                                               
+       6 +How evaluate(value, history) decides:                          
+       7 +                                                               
+       8 +    fewer than MIN_HISTORY (4) history weeks? ── yes ──▶ NOT_EN
+         +OUGH (usual/band/pct = None)                                   
+       9 +                     │ no                                      
+      10 +                     ▼                                         
+      11 +    usual  = median(history)                  a single spike we
+         +ek can't move it                                               
+      12 +    MAD    = median(|week − usual|)           the "typical wobb
+         +le"                                                            
+      13 +    spread = max(1.4826 · MAD, √usual)        never narrower th
+         +an chance (Poisson noise)                                      
+      14 +    band   = [max(0, usual − K·spread), usual + K·spread]      
+         + K = 2.5                                                       
+      15 +                     │                                         
+      16 +                     ▼                                         
+      17 +    flag only if ALL of:  a) value outside the band            
+      18 +                          b) |value − usual| ≥ MIN_ABS (3)     
+      19 +                          c) |pct| ≥ MIN_PCT (20%)   (if usual 
+         +== 0: value > 0)                                               
+      20 +                     │                                         
+      21 +          flagged ───┴─── not flagged                          
+      22 +             ▼                 ▼                               
+      23 +    HIGHER if value > usual   NORMAL                           
+      24 +    else LOWER                                                 
+      25 +    (separately: low_volume = usual ≤ LOW_VOLUME_USUAL (6), a U
+         +I warning only)                                                
+      26 +                                                               
+      27 +Example 1, a typical account (scenarios S2/S3).                
+      28 +History 20 22 18 21 19 20 23 17: usual 20, MAD 1.5 (×1.4826 = 2
+         +.2) < √20 = 4.47, so spread 4.47                               
+      29 +and band 8.8 – 31.2.                                           
+      30 +                                                               
+      31 +       0    5         8.8              20  21           31.2   
+         +      40                                                       
+      32 +       ├────●─────────┼────────────────●───●────────────┼──────
+         +──────●───▶ events                                             
+      33 +            5: LOWER −75%                  21: NORMAL +5%      
+         +      40: HIGHER +100%                                         
+      34 +                                                               
+      35 +Example 2, a one-off spike in the history (scenario R1).       
+      36 +History 20 20 20 300 20 20 20 20: the mean would be 55 and a dr
+         +op to 5 might pass as normal.                                  
+      37 +The median is 20 and MAD is 0, so the √20 floor gives the same 
+         +band as Example 1 (8.8 – 31.2):                                
+      38 +week 20 is NORMAL and week 5 is LOWER. This is why the seed's 2
+         +026-06-03 spike (account 6) doesn't                            
+      39 +distort the weeks after it.                                    
+      40  """
+      41  
+      42  from collections.abc import Mapping, Sequence
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● I've added the short version as the module docstring at the top of
+  backend/app/domain/detection.py. It's committed on task/2-domain-logic as
+  4030eeb, because that PR isn't merged yet.
+
+  It contains:
+  - the decision flow of evaluate(): the history check, then usual, MAD, spread
+    and band, then the three guards and the result;
+  - Example 1 (S2/S3): a band of 8.8–31.2 on a number line, with weeks of 5, 21
+    and 40 marked lower, normal and higher;
+  - Example 2 (R1): why the median stops a one-off spike from distorting later
+    weeks, linked to account 6's spike on 2026-06-03 in the seed.
+
+  The constant names in the diagram match the code (MIN_HISTORY, K, MIN_ABS,
+  MIN_PCT, LOW_VOLUME_USUAL), so a change to a constant should be easy to spot
+  in the docstring as well.
+
+  Lint, the format check and all 25 tests still pass. The PR is now 393 changed
+  lines, and I've updated that number in .pr/2/pr-body.md. If you've already run
+  .pr/2/create-pr.sh, run it again to push the new commit.
+
+✻ Churned for 24s · done Tuesday 8:14 PM
+
+❯ similar for backend/app/domain/ranking.py show me first and then i will acept 
+  or not                                                                        
+
+  Read 1 file (ctrl+o to expand)
+
+● Here's the proposed module docstring for backend/app/domain/ranking.py. I
+  haven't changed any file yet.
+
+  """Order locations so the ones needing attention come first (PLAN.md section 
+  2: Ranking of locations).
+
+  How rank_locations() orders them, as three groups that are never mixed:
+
+      input (any order)
+            │
+            ├── status LOWER ───────────────▶ 1. NEEDS ATTENTION   sort: pct 
+  ascending (biggest drop
+            │                                                       first), ties
+  by name
+            ├── status HIGHER or NORMAL ────▶ 2. FINE              sort: by name
+  only (higher is not
+            │                                                       a problem, 
+  so no status priority)
+            └── status NOT_ENOUGH ──────────▶ 3. NO VERDICT YET    sort: by name
+            │
+            ▼
+      output = group 1 + group 2 + group 3
+
+  Example (scenarios S4 + R3: five locations, account summary NORMAL).
+
+      input                                   output
+      ─────────────────────────────           
+  ─────────────────────────────────────────────
+      North   20 vs ~20   NORMAL               1. East    4 vs ~20  −80%  LOWER 
+    ┐ needs
+      South    8 vs ~20   LOWER  −60%          2. South   8 vs ~20  −60%  LOWER 
+    ┘ attention
+      New      5          NOT_ENOUGH           3. North  20 vs ~20   0%   NORMAL
+    ┐ fine, A→Z
+      West    35 vs ~20   HIGHER +75%          4. West   35 vs ~20  +75%  HIGHER
+    ┘
+      East     4 vs ~20   LOWER  −80%          5. New     5         —     
+  NOT_ENOUGH  no verdict
+
+      Ties: two LOWER locations at −50% keep name order ("Site B" before "Site 
+  D").
+
+  Note: the account total here (67 vs ~80 in S4) is within its band, so the 
+  summary says NORMAL even
+  though two locations dropped. The ranking is what surfaces them.
+  """
+
+  Two choices in this draft that you might want changed:
+  - The example combines two scenarios. S4 has four locations, and I added R3's
+    "New" so the diagram shows all three groups. If you'd rather the example
+    match a single test exactly, I'll drop "New" and use S4 only.
+  - The existing function docstring stays. It lists the three groups in prose,
+    so the two overlap slightly. I can shorten it to one line, for example
+    """See the module docstring.""", so the rules live in one place.
+
+  If you accept, I'll add it, run the lint and the tests, commit on
+  task/2-domain-logic, and update the line count in .pr/2/pr-body.md.
+
+✻ Baked for 15s · done Tuesday 8:16 PM
+❯ ok add it, use S4 only                                                        
+
+● Update(backend/app/domain/ranking.py)
+  ⎿  Added 29 lines, removed 1 line
+       1 -"""Order locations so the ones needing attention come first (PL
+         -AN.md section 2: Ranking of locations)."""                     
+       1 +"""Order locations so the ones needing attention come first (PL
+         +AN.md section 2: Ranking of locations).                        
+       2  
+       3 +How rank_locations() orders them, as three groups that are neve
+         +r mixed:                                                       
+       4 +                                                               
+       5 +    input (any order)                                          
+       6 +          │                                                    
+       7 +          ├── status LOWER ───────────────▶ 1. NEEDS ATTENTION 
+         +  sort: pct ascending (biggest drop                            
+       8 +          │                                                    
+         +   first), ties by name                                        
+       9 +          ├── status HIGHER or NORMAL ────▶ 2. FINE            
+         +  sort: by name only (higher is not                            
+      10 +          │                                                    
+         +   a problem, so no status priority)                           
+      11 +          └── status NOT_ENOUGH ──────────▶ 3. NO VERDICT YET  
+         +  sort: by name                                                
+      12 +          │                                                    
+      13 +          ▼                                                    
+      14 +    output = group 1 + group 2 + group 3                       
+      15 +                                                               
+      16 +Example (scenario S4: four locations, each with a usual of ~20)
+         +.                                                              
+      17 +                                                               
+      18 +    input                                   output             
+      19 +    ─────────────────────────────           ───────────────────
+         +──────────────────────                                         
+      20 +    North   20 vs ~20   NORMAL               1. East    4 vs ~2
+         +0  −80%  LOWER    ┐ needs                                      
+      21 +    South    8 vs ~20   LOWER  −60%          2. South   8 vs ~2
+         +0  −60%  LOWER    ┘ attention                                  
+      22 +    East     4 vs ~20   LOWER  −80%          3. North  20 vs ~2
+         +0   0%   NORMAL   ┐ fine, A→Z                                  
+      23 +    West    35 vs ~20   HIGHER +75%          4. West   35 vs ~2
+         +0  +75%  HIGHER   ┘                                            
+      24 +                                                               
+      25 +    Ties: two LOWER locations at −50% keep name order ("Site B"
+         + before "Site D").                                             
+      26 +                                                               
+      27 +Note: the account total (67 vs ~80, lower bound 57.6) is within
+         + its band, so the summary says NORMAL                          
+      28 +even though two locations dropped. The ranking is what surfaces
+         + them.                                                         
+      29 +"""                                                            
+      30 +                                                               
+      31  from collections.abc import Sequence
+      32  
+      33  from app.domain.detection import Evaluation, Status
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● I've added the ranking diagram to backend/app/domain/ranking.py as its module
+  docstring, using S4 only. It's committed on task/2-domain-logic as df419d4.
+
+  - Example: the four S4 locations, given in any order, come out as East (−80%),
+    South (−60%), North (normal), West (higher). Below that is the note that
+    the account summary is still NORMAL (67 vs ~80, lower bound 57.6) even
+    though two locations dropped, because the ranking is what surfaces them.
+  - Ties line: I kept the one line on tie-breaking (two locations at −50% sort
+    by name). It's a general rule, not tied to any scenario. Say if you want it
+    removed.
+  - Function docstring: rank_locations() still has its own prose docstring. You
+    didn't say to change it, so I left it alone.
+
+  Lint, the format check and all 25 tests pass. The PR is now 421 changed lines,
+  and I've updated .pr/2/pr-body.md. If you've already pushed, run
+  .pr/2/create-pr.sh again to push this commit.
+
+✻ Baked for 18s · done Tuesday 8:17 PM
+
+❯ merged, list the changes to the agents                                        
+
+  Ran 1 shell command, recalled 1 memory, wrote 1 memory (ctrl+o to expand)
+
+● Your merge of PR #3 is on main (a2cb996). These are the changes I'd make to
+  the agent definitions. None is applied yet; they're all saved in memory.
+
+  From Task 1 (the /health bug and your pyproject feedback)
+
+  1. Builders test the real failure (api-builder, frontend-builder). Every error
+     response in the plan gets a test that actually causes it: an unreachable
+     DB, a missing row, or bad input. A mocked function that raises doesn't
+     count. Reason: /health returned 500 instead of 503 because the failure
+     happened outside the try.
+  2. Builders add why-comments (both builders). Config files and non-obvious
+     code get short comments that explain why and cite the PLAN.md section.
+     Reason: you found pyproject.toml too cryptic.
+  3. Reviewers trigger each error path for real (api-reviewer,
+     frontend-reviewer). That means stopping the db or sending a bad input, then
+     recording the status code and body. Reviewers also check that config files
+     have comments. Reason: the 503 bug was found only because the reviewer
+     stopped the DB on its own initiative.
+  4. Builders report warnings (both builders). New test warnings go under
+     Follow-ups, and trivial ones get fixed. The Alembic path_separator warning
+     and the httpx deprecation in TestClient are still open.
+
+  From Task 2 (the mutation gaps and your docstring requests)
+
+  5. Reviewers check that tests can fail (both reviewers). They change a
+     constant or a </≤ boundary in a scratch copy, confirm a test fails, then
+     revert. Reason: this found 5 rules that no test checked. Until now it only
+     happened because I asked for it in the prompt.
+  6. Builders add a diagram to logic modules (api-builder, plus a matching rule
+     for frontend logic such as format.ts/storage.ts). A module with branching
+     logic gets a docstring with an ASCII flow diagram and one worked example
+     from a section 4 scenario, taken from a single scenario rather than a
+     merged one. Reason: you asked for this for detection.py and ranking.py and
+     accepted both.
+
+  The formatter touched files outside the task's scope, but no rule is needed
+  for that: the builder already lists those files, and the reviewer checks them.
+
+  Each change adds about one or two lines to each agent file. I'd apply all six
+  on their own branch, task/0b-agents, with a .pr/0b/ handoff, so they're in
+  place before Task 3 starts. Do you want all six, or only some of them? Or
+  should I keep them parked and start Task 3?
+
+✻ Crunched for 21s · done Tuesday 8:22 PM
+
+❯ apply all six (create a new branch so i can push and review that)             
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Update(.claude/agents/api-builder.md)
+  ⎿  Added 3 lines
+      18  - Python: type hints everywhere, small pure functions. `app/dom
+          ain/` imports nothing from FastAPI, SQLAlchemy or `app.reposito
+          ry`.
+      19  - Timezone conversion only in Python (`zoneinfo`), never in SQL
+          . All SQL must run on both Postgres and SQLite.
+      20  - Never edit `data/seed.sql`, never modify raw table data, neve
+          r hand-run DDL (migrations only).
+      21 +- **Error paths are tested for real.** Every error response the
+         + plan specifies (503, 404, 422, …) gets a test that causes the 
+         +real failure: an unreachable DB (e.g. a SQLite file in a nonexi
+         +stent directory), a missing row, bad input. A mocked function t
+         +hat raises is not enough on its own: in Task 1, `/health` gave 
+         +500 instead of 503 because the connection failed in the depende
+         +ncy, outside the handler's `try`.                              
+      22 +- **Comments explain why.** Config files (`pyproject.toml`, `al
+         +embic.ini`, Dockerfile, compose, entrypoint scripts) and non-ob
+         +vious code get short comments that explain *why*, citing the PL
+         +AN.md section when a value comes from the plan. Don't restate t
+         +he code. Uncommented config reads as cryptic to the reviewers o
+         +f this repo.                                                   
+      23 +- **Logic modules get a diagram.** A module with branching logi
+         +c (e.g. `app/domain/*`) gets a module docstring with an ASCII f
+         +low diagram of the decision and one worked example taken from a
+         + **single** PLAN.md section 4 scenario (not merged from several
+         +), using the real constant names. See `app/domain/detection.py`
+         + and `app/domain/ranking.py`.                                  
+      24  
+      25  Before handing off each branch:
+      26  - Run the task's **Quickstart** exactly as written; every comma
+          nd must pass. Paste the trimmed output in the PR.
+
+● Update(.claude/agents/api-builder.md)
+  ⎿  Added 1 line
+      25  Before handing off each branch:
+      26  - Run the task's **Quickstart** exactly as written; every comma
+          nd must pass. Paste the trimmed output in the PR.
+      27  - Check the line count (< 700).
+      28 +- Check the pytest warnings summary. List every warning your ch
+         +ange introduced, and any still open, under "Follow-ups" in the 
+         +PR. Fix a warning if the fix is trivial and inside the task's s
+         +cope.                                                          
+      29  - Commit locally (`<type>(<area>): <summary>`). **Never push, n
+          ever use `gh`, never call GitHub MCP tools**: the human opens t
+          he PR from the host.
+      30  - Write the handoff files exactly as in PLAN.md section 1 "Hand
+          off files": `.pr/<id>/pr-body.md` (Goal · Changes · Tests added
+           · Quickstart output · Line count · Decisions taken · Deviation
+          s · Follow-ups) and `.pr/<id>/create-pr.sh` from the template (
+          `chmod +x`; `BASE` = `main`, or the previous branch for a stack
+          ed PR). Don't write `review.md`; that's the reviewer's file.
+      31  
+
+● Update(.claude/agents/frontend-builder.md)
+  ⎿  Added 3 lines
+      18  - TypeScript strict, function components, no `any`. Types come 
+          from `src/api/types.ts` (generated from `openapi.json`). Never 
+          change the backend or `openapi.json`; if the contract seems wro
+          ng, stop and report.
+      19  - The UI shows what the API returns: no re-sorting, no re-compu
+          ting statuses or numbers. Use the exact copy, formats, icons an
+          d colours from PLAN.md 3.7.
+      20  - Tests render through Testing Library with HTTP mocked by MSW 
+          and fixtures typed with `satisfies`; never call a live API in t
+          ests. Commit the lockfile.
+      21 +- **Error paths are tested for real.** Every error state the pl
+         +an specifies (`Couldn't load data.`, invalid stored selection, 
+         +blocked `localStorage`) gets a test that causes the real failur
+         +e: an MSW handler returning 500 or a network error (`HttpRespon
+         +se.error()`), broken JSON in storage, `getItem`/`setItem` that 
+         +throw. Don't only stub the hook or the client function.        
+      22 +- **Comments explain why.** Config files (`vite.config.ts`, `ts
+         +config.json`, `eslint.config.js`, `package.json` scripts where 
+         +the format allows, Dockerfile, nginx config) and non-obvious co
+         +de get short comments that explain *why*, citing the PLAN.md se
+         +ction when a value comes from the plan. Don't restate the code.
+         + Uncommented config reads as cryptic to the reviewers of this r
+         +epo.                                                           
+      23 +- **Logic modules get a diagram.** A module with branching logi
+         +c (e.g. `storage.ts` validation, `format.ts`) gets a top-of-fil
+         +e comment with an ASCII flow diagram and one worked example tak
+         +en from a **single** PLAN.md section 4 scenario, as in `backend
+         +/app/domain/detection.py`.                                     
+      24  
+      25  Before handing off each branch:
+      26  - Run the task's **Quickstart** exactly as written; every comma
+          nd must pass. Paste the trimmed output in the PR.
+
+● Update(.claude/agents/frontend-builder.md)
+  ⎿  Added 1 line
+      25  Before handing off each branch:
+      26  - Run the task's **Quickstart** exactly as written; every comma
+          nd must pass. Paste the trimmed output in the PR.
+      27  - Check the line count (< 700).
+      28 +- Check the warnings from lint, tests (Vitest, React `act(...)`
+         + warnings, MSW unhandled requests) and the build. List every wa
+         +rning your change introduced, and any still open, under "Follow
+         +-ups" in the PR. Fix a warning if the fix is trivial and inside
+         + the task's scope.                                             
+      29  - Commit locally (`<type>(<area>): <summary>`). **Never push, n
+          ever use `gh`, never call GitHub MCP tools**: the human opens t
+          he PR from the host.
+      30  - Write the handoff files exactly as in PLAN.md section 1 "Hand
+          off files": `.pr/<id>/pr-body.md` (Goal · Changes · Tests added
+           · Quickstart output · Line count · Decisions taken · Deviation
+          s · Follow-ups) and `.pr/<id>/create-pr.sh` from the template (
+          `chmod +x`; `BASE` = `main`, or the previous branch for a stack
+          ed PR). Don't write `review.md`; that's the reviewer's file.
+      31  
+
+● Update(.claude/agents/api-reviewer.md)
+  ⎿  Added 3 lines
+      22     - **Correctness traps:** off-by-one week ranges, DST/Phoenix
+          /UTC, `usual = 0`, empty accounts and an empty dataset, SQLite 
+          returning timestamps as strings.
+      23     - **Portability:** migrations and SQL run on Postgres and SQ
+          Lite; seed and raw tables untouched; dependencies pinned.
+      24     - **Tests:** every item in the task's Tests section exists, 
+          uses the expected values from PLAN.md section 4 where given, an
+          d would fail if the logic were wrong (no tautologies, no assert
+          ing on mocks only).
+      25 +   - **Error paths, triggered for real:** cause each error resp
+         +onse the task touches at least once yourself (stop the db with 
+         +`docker compose stop db`, send a bad `week_start`, an unknown i
+         +d) and record the status code and body you got. Restart anythin
+         +g you stopped (`docker compose up -d --wait`). A mismatch with 
+         +PLAN.md 3.5 is blocking.                                       
+      26 +   - **Mutation spot-checks:** change a few constants and bound
+         +aries (`<` vs `≤`, `>=` vs `>`, a constant ±1, a removed factor
+         + or clamp) one at a time, run the relevant tests, then restore 
+         +the file with `git checkout -- <file>`. A mutation that no test
+         + catches is a should-fix, unless it is an equivalent mutant (sa
+         +me behavior). List what you tried and what survived. Leave `git
+         + status` clean.                                                
+      27 +   - **Comments:** config files and non-obvious code have short
+         + why-comments, and logic modules have the docstring diagram and
+         + worked example (see `api-builder.md`). Comments must not contr
+         +adict the code or the plan. Missing comments are a should-fix. 
+      28  5. Write the review to `.pr/<id>/review.md`, overwriting any pr
+          evious review. The human posts it as a PR comment through `crea
+          te-pr.sh`. Don't modify any other file. Format: **Verdict** (AP
+          PROVE / CHANGES REQUESTED) · Quickstart result · Findings (seve
+          rity blocking / should-fix / nit, `file:line`, problem, suggest
+          ed fix) · What was verified.
+      29  
+      30  Only report findings you verified by reading or running the cod
+          e. Final report to the orchestrator (≤ 15 lines): verdict, bloc
+          king findings, path of `review.md`.
+
+● Update(.claude/agents/frontend-reviewer.md)
+  ⎿  Added 3 lines
+      22     - **UX/accessibility:** labelled, keyboard-usable controls; 
+          status never conveyed by colour alone.
+      23     - **Quality:** strict TS, no `any`, no dead code or leftover
+           logs; only libraries from 3.1, exact pins; lockfile committed.
+      24     - **Tests:** every item in the task's Tests section exists, 
+          uses the expected values from PLAN.md section 4 where given, an
+          d would fail if the logic were wrong (no tautologies, no assert
+          ing on mocks only).
+      25 +   - **Error paths, triggered for real:** check that each error
+         + state the task touches is tested with a real failure (an MSW 5
+         +00 or network error, broken JSON in storage, throwing `localSto
+         +rage`). When the stack is running, also check one for real in t
+         +he browser or with `curl` (e.g. stop the api and reload). Recor
+         +d what you saw.                                                
+      26 +   - **Mutation spot-checks:** change a few conditions, constan
+         +ts or formats one at a time (e.g. `<=` vs `<` in the week-navig
+         +ation limit, the U+2212 minus replaced by `-`, a dropped storag
+         +e validation check), run the relevant tests, then restore the f
+         +ile with `git checkout -- <file>`. A mutation that no test catc
+         +hes is a should-fix, unless it is an equivalent mutant (same be
+         +havior). List what you tried and what survived. Leave `git stat
+         +us` clean.                                                     
+      27 +   - **Comments:** config files and non-obvious code have short
+         + why-comments, and logic modules have the top-of-file diagram a
+         +nd worked example (see `frontend-builder.md`). Comments must no
+         +t contradict the code or the plan. Missing comments are a shoul
+         +d-fix.                                                         
+      28  5. Write the review to `.pr/<id>/review.md`, overwriting any pr
+          evious review. The human posts it as a PR comment through `crea
+          te-pr.sh`. Don't modify any other file. Format: **Verdict** (AP
+          PROVE / CHANGES REQUESTED) · Quickstart result · Findings (seve
+          rity blocking / should-fix / nit, `file:line`, problem, suggest
+          ed fix) · What was verified.
+      29  
+      30  Only report findings you verified by reading or running the cod
+          e. Final report to the orchestrator (≤ 15 lines): verdict, bloc
+          king findings, path of `review.md`.
+
+● Bash(sed -i 's/Don'"'"'t modify any other file\./Don'"'"'t leave any other
+      file modified (temporary mutations are restored before you finish)./'
+      .claude/agents/api-r…)
+  ⎿  .claude/agents/frontend-reviewer.md:28:5. Write the review to `.pr/<id
+     >/review.md`, overwriting any previous review. The human posts it as a
+      PR comment through `create-pr.sh`. Don't leave any other file modifie
+     … +13 lines (ctrl+o to expand)
+  ⎿  Updated .claude/agents/api-reviewer.md (+1 -1)
+      25     - **Error paths, triggered for real:** cause each error resp
+          onse the task touches at least once yourself (stop the db with 
+          `docker compose stop db`, send a bad `week_start`, an unknown i
+          d) and record the status code and body you got. Restart anythin
+          g you stopped (`docker compose up -d --wait`). A mismatch with 
+          PLAN.md 3.5 is blocking.
+      26     - **Mutation spot-checks:** change a few constants and bound
+          aries (`<` vs `≤`, `>=` vs `>`, a constant ±1, a removed factor
+           or clamp) one at a time, run the relevant tests, then restore 
+          the file with `git checkout -- <file>`. A mutation that no test
+           catches is a should-fix, unless it is an equivalent mutant (sa
+          me behavior). List what you tried and what survived. Leave `git
+           status` clean.
+      27     - **Comments:** config files and non-obvious code have short
+           why-comments, and logic modules have the docstring diagram and
+           worked example (see `api-builder.md`). Comments must not contr
+          adict the code or the plan. Missing comments are a should-fix.
+      28 -5. Write the review to `.pr/<id>/review.md`, overwriting any pr
+         -evious review. The human posts it as a PR comment through `crea
+         -te-pr.sh`. Don't modify any other file. Format: **Verdict** (AP
+         -PROVE / CHANGES REQUESTED) · Quickstart result · Findings (seve
+         -rity blocking / should-fix / nit, `file:line`, problem, suggest
+         -ed fix) · What was verified.                                   
+      28 +5. Write the review to `.pr/<id>/review.md`, overwriting any pr
+         +evious review. The human posts it as a PR comment through `crea
+         +te-pr.sh`. Don't leave any other file modified (temporary mutat
+         +ions are restored before you finish). Format: **Verdict** (APPR
+         +OVE / CHANGES REQUESTED) · Quickstart result · Findings (severi
+         +ty blocking / should-fix / nit, `file:line`, problem, suggested
+         + fix) · What was verified.                                     
+      29  
+      30  Only report findings you verified by reading or running the cod
+          e. Final report to the orchestrator (≤ 15 lines): verdict, bloc
+          king findings, path of `review.md`.
+  ⎿  Updated .claude/agents/frontend-reviewer.md (+1 -1)
+      25     - **Error paths, triggered for real:** check that each error
+           state the task touches is tested with a real failure (an MSW 5
+          00 or network error, broken JSON in storage, throwing `localSto
+          rage`). When the stack is running, also check one for real in t
+          he browser or with `curl` (e.g. stop the api and reload). Recor
+          d what you saw.
+      26     - **Mutation spot-checks:** change a few conditions, constan
+          ts or formats one at a time (e.g. `<=` vs `<` in the week-navig
+          ation limit, the U+2212 minus replaced by `-`, a dropped storag
+          e validation check), run the relevant tests, then restore the f
+          ile with `git checkout -- <file>`. A mutation that no test catc
+          hes is a should-fix, unless it is an equivalent mutant (same be
+          havior). List what you tried and what survived. Leave `git stat
+          us` clean.
+      27     - **Comments:** config files and non-obvious code have short
+           why-comments, and logic modules have the top-of-file diagram a
+          nd worked example (see `frontend-builder.md`). Comments must no
+          t contradict the code or the plan. Missing comments are a shoul
+          d-fix.
+      28 -5. Write the review to `.pr/<id>/review.md`, overwriting any pr
+         -evious review. The human posts it as a PR comment through `crea
+         -te-pr.sh`. Don't modify any other file. Format: **Verdict** (AP
+         -PROVE / CHANGES REQUESTED) · Quickstart result · Findings (seve
+         -rity blocking / should-fix / nit, `file:line`, problem, suggest
+         -ed fix) · What was verified.                                   
+      28 +5. Write the review to `.pr/<id>/review.md`, overwriting any pr
+         +evious review. The human posts it as a PR comment through `crea
+         +te-pr.sh`. Don't leave any other file modified (temporary mutat
+         +ions are restored before you finish). Format: **Verdict** (APPR
+         +OVE / CHANGES REQUESTED) · Quickstart result · Findings (severi
+         +ty blocking / should-fix / nit, `file:line`, problem, suggested
+         + fix) · What was verified.                                     
+      29  
+      30  Only report findings you verified by reading or running the cod
+          e. Final report to the orchestrator (≤ 15 lines): verdict, bloc
+          king findings, path of `review.md`.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● I've applied all six changes to the four agent files on a new branch,
+  task/0b-agents, as one commit (9291da1, +16/−2). To push it and open the PR,
+  run this on the host:
+
+  .pr/0b/create-pr.sh
+
+  What each agent file gets:
+
+  File: api-builder.md
+  Changes: Real error-path tests: each error response is tested by causing the
+  actual failure (an unreachable DB, a missing row, bad input), with the
+  /health 503 bug as the example. Why-comments: config files and non-obvious
+  code get comments that explain why and cite PLAN.md. Diagrams: logic modules
+  get an ASCII diagram and one example from a single scenario, pointing to
+  detection.py and ranking.py. Warnings: pytest warnings go under Follow-ups.
+  ────────────────────────────────────────
+  File: frontend-builder.md
+  Changes: The same four rules for the frontend. Error paths use an MSW 500 or
+  network error, broken stored JSON, and a localStorage that throws. Comments
+  cover the vite, tsconfig, eslint and nginx configs. The diagram rule covers
+  storage.ts and format.ts. Warnings include React act(...) and unhandled MSW
+  requests.
+  ────────────────────────────────────────
+  File: api-reviewer.md
+  Changes: Error paths: the reviewer causes each one itself (docker compose stop
+   
+  db, a bad week_start, an unknown id), records the status and body, then
+  restarts the db; a mismatch is blocking. Mutation checks: change a boundary
+  or constant, run the tests, restore with git checkout; a change that no test
+  catches is a should-fix. Comments: the reviewer checks they're present and
+  accurate.
+  ────────────────────────────────────────
+  File: frontend-reviewer.md
+  Changes: The same three checks for the frontend, including frontend examples
+  of
+  code changes to try: the week limit <=, the U+2212 minus, a dropped storage
+  validation check.
+
+  One more wording change was needed. Both reviewers had the rule "Don't modify
+  any other file", which conflicted with the mutation checks. It now reads
+  "don't leave any other file modified (temporary mutations are restored before
+  you finish)".
+
+  The PR description (.pr/0b/pr-body.md) has a table of the six rules, each with
+  what caused it. It also explains that PLAN.md isn't touched, because these
+  are agent instructions rather than plan changes.
+
+  There's no review.md for this PR, since it doesn't change app code and our
+  reviewers check app code against the plan. You'll be the reviewer.
+
+  The Task 3 builder only picks up these rules from main. So the next step is up
+  to you:
+  - Merge #0b first: Task 3 then runs with the new rules from the agent files.
+  - Start Task 3 now: I'll add the six rules to its prompt by hand, as I did for
+    Task 2.
+
+✻ Brewed for 1m 14s · done Tuesday 8:26 PM
+
+❯ merged, do i have to restart?                                                 
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Yes, a restart is the safest choice. Your merge (PR #4, bb5b5f1) is on main,
+  and the updated agent files are on disk. But Claude Code reads the agent
+  definitions in .claude/agents/ when a session starts, so this session may
+  still be using the old versions for api-builder and the other agents. I can't
+  tell for sure from inside the session.
+
+  You have two options:
+
+  1. Restart (recommended, and it costs little). Exit and start a new session in
+     this directory, or open /agents in the session to reload the definitions.
+     My memory notes cover the current state: the workflow, your preference for
+     commented config, and the six new rules being merged. In the new session,
+     just say "start task 3".
+  2. Don't restart. I'll start Task 3 now and add the six rules to the builder's
+     and reviewer's prompts by hand, as I did for Task 2. The rules apply
+     either way. The only downside is that this run doesn't test whether the
+     agent files work on their own.
+
+  I'd restart, because Task 3 will then show whether the new agent files work
+  without extra rules in the prompt. Which do you prefer?
+
+✻ Churned for 14s · done Tuesday 8:33 PM
+
+❯ /restart 
+  ⎿  Session resumed
+
+❯ continue with task 3                                                          
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Main now includes the PR #4 merge and the session has reloaded the new agent
+  rules, so I'm starting Task 3 without pasting the rules in by hand to test
+  whether the agent files work alone.
+
+● api-builder(Implement PLAN.md Task 3)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+● I've started api-builder on Task 3, on the branch task/3-repository-accounts.
+  main is at the PR #4 merge, and the restarted session has loaded the new agent
+  rules.
+
+  This time I didn't paste the six rules into the prompt, so this run checks
+  whether the agent files work on their own. When the result comes back, I'll
+  check for real error-path tests, why-comments, diagrams in the logic code and
+  warnings listed under Follow-ups.
+
+  The task covers:
+  - the repository functions;
+  - all the response models in schemas.py;
+  - the seed loader, including a python -m app.seed entry point;
+  - GET /accounts, with each account's latest_complete_week computed in that
+    account's timezone.
+
+  I also asked for three specific things:
+  - /health switches to the Health model, with the 503 behavior unchanged.
+  - The builder deals with the two warnings still open from earlier tasks.
+  - It doesn't swap any library without asking.
+
+  I've also updated memory: the six rules are now marked as merged in PR #4.
+
+  When the builder finishes, I'll run api-reviewer on the branch and give you
+  the verdict.
+
+✻ Brewed for 26s · done Tuesday 8:33 PM
+
+● Agent "Implement PLAN.md Task 3" finished · 1m 53s
+
+● api-reviewer(Review PLAN.md Task 3 branch)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● The builder has finished Task 3, and api-reviewer is now checking it.
+
+  Builder's result: committed locally on task/3-repository-accounts and not
+  pushed. The change is 329 lines.
+
+  - Quickstart: lint is clean and all 32 tests pass. Against Postgres, /accounts
+    returns the 20 accounts ordered by name. Quiet Harbor Spa has
+    location_count 0, and every account's latest_complete_week is 2026-07-20.
+  - Seed loader: it loads 12,626 events, and a second run skips. That held both
+    in the slow SQLite test and on a scratch Postgres DB.
+  - Tests beyond the plan's list:
+    - a latest_complete_week case computed in Asia/Tokyo time;
+    - a null latest_complete_week when the dataset is empty;
+    - a real unreachable-DB test on /accounts.
+
+    The first and last show that the new error-path rule worked without being
+    put in the prompt.
+  - Warnings: it fixed the Alembic warning with a one-line change in
+    alembic.ini.
+
+  One decision for you: the httpx deprecation warning. Starlette's TestClient
+  now warns that httpx should be replaced by httpx2. PLAN.md 3.1 lists only
+  httpx, so the builder correctly stopped instead of adding a library.
+
+  My recommendation is to keep httpx for now. It's only a deprecation warning,
+  tests pass, and swapping libraries means a PLAN_CHANGES.md entry. We can
+  revisit it if a Starlette upgrade actually breaks it. Tell me if you'd rather
+  switch now.
+
+  The reviewer is also checking whether a 500 is acceptable when the DB is
+  unreachable on /accounts, since the plan doesn't specify that case. I'll pass
+  on the verdict when the review is done.
+
+✻ Sautéed for 16s · done Tuesday 8:36 PM
+
+● Agent "Review PLAN.md Task 3 branch" finished · 2m 9s
+
+● The reviewer approved, but the latest_complete_week test doesn't actually
+  check the timezone rule. That rule is the core of the Monday-morning view, so
+  I'm sending the builder back to fix the test.
+  ⎿  Resuming agent ae138e3
+
+● The reviewer approved Task 3 with no blocking findings, and I've sent the
+  builder back for one test fix before you open the PR.
+
+  What passed:
+  - Lint and tests: lint is clean, and all 32 tests pass, including the slow
+    ones.
+  - /accounts on Postgres: it returns the 20 accounts ordered by name. Quiet
+    Harbor Spa has location_count 0, and every account's latest_complete_week is
+    2026-07-20.
+  - Error paths: the reviewer stopped the DB itself. /health returned 503 with
+    the exact body, and /accounts returned 500. The reviewer considers the 500
+    acceptable, because PLAN.md specifies no error for that case. Both returned
+    200 again after a restart.
+  - Seed loader: a broken seed file rolls back completely on both Postgres and
+    SQLite, and a second run skips.
+  - Alembic: the path_separator fix works on both engines, and that warning is
+    gone.
+  - Mutation checks: the LEFT JOIN, COUNT(DISTINCT), the name ordering,
+    AS_OF_DATE taking precedence and the empty-dataset guard each fail a test
+    when changed.
+
+  What I sent back: the latest_complete_week test passes even if the code uses
+  the UTC date instead of the account's local date, or the earliest event
+  instead of the latest. The new test sets the dataset's last event at Sun
+  2026-07-26 23:30 in Chicago, which is already Monday in UTC. The Chicago
+  account must then get 07-13, and an account in UTC must get 07-20. The test
+  also adds an earlier event, which catches the earliest-vs-latest mistake. The
+  change is tests only.
+
+  Still yours to decide: whether to keep httpx or switch to httpx2. I recommend
+  keeping httpx for now.
+
+  This is the second task in a row where the reviewer's mutation checks found a
+  weak test. That's the rule from PR #4 doing its job, and it means you don't
+  need to ask for those checks in each prompt any more.
+
+✻ Cooked for 16s · done Tuesday 8:38 PM
+
+● Agent "Implement PLAN.md Task 3" finished · 38s
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Task 3 is ready for you to open the PR. On the host, run:
+
+  .pr/3/create-pr.sh
+
+  The branch task/3-repository-accounts has two local commits:
+  - cc6dbbb: the repository, schemas, seed loader and GET /accounts. The
+    reviewer approved it.
+  - 587bf8e: the stronger latest_complete_week test. I confirmed it only touches
+    test_accounts.py (+12/−4). It uses a Chicago account whose last event is
+    Sunday 23:30 local time, which is already Monday in UTC, and expects
+    2026-07-13. A Tokyo account expects 2026-07-20. The builder checked that
+    using the UTC date, or the earliest event instead of the latest, now fails
+    the test, then put the code back.
+
+  I re-ran the checks myself: lint and the format check are clean, and all 32
+  tests pass. The PR is 337 changed lines. I added a follow-up note to
+  .pr/3/review.md saying the should-fix was closed, so it will show in the PR
+  comment.
+
+  The one warning left is the httpx deprecation, which needs your decision. I
+  recommend keeping httpx as PLAN.md lists it, unless you want to switch to
+  httpx2 now.
+
+  Once you've merged and pulled, tell me and I'll start Task 4, the GET 
+  /accounts/{id}/weekly-insight endpoint.
+
+✻ Cogitated for 5m 33s · done Tuesday 8:39 PM
+
+❯ merged, keep httpx, continue with task 4                                      
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● api-builder(Implement PLAN.md Task 4)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● I've noted your decision to keep httpx and started api-builder on Task 4. It's
+  working on the branch task/4-weekly-insight, from main at 0027a90 (the PR #5
+  merge).
+
+  - httpx: I saved the decision to memory. Builders will treat the httpx2
+    deprecation warning as known and accepted, list it under Follow-ups, and
+    stop asking you about it.
+  - Task 4: this is the dashboard endpoint, GET /accounts/{id}/weekly-insight.
+    It takes the week's events and builds the account verdict, the 7 days with
+    their usual values, the ranked locations and the data notes. It reuses the
+    domain and repository code from Tasks 2–3 instead of repeating it.
+  - Rules I flagged: the first complete week is computed in the account's
+    timezone. The duplicate count uses the local date of each raw row. The
+    rounding, Baseline.start/end, and the three 422 messages and the 404 must
+    match the plan exactly.
+  - Quickstart check: on the seeded database, account 6 for week 2026-06-01 must
+    return a total of 880 and higher_than_usual, and week 2026-06-02 must
+    return a 422.
+
+  When the builder finishes, I'll run api-reviewer on the branch and give you
+  the verdict.
+
+✻ Crunched for 23s · done Tuesday 8:47 PM
+
+● Agent "Implement PLAN.md Task 4" finished · 1m 47s
+
+● api-reviewer(Review PLAN.md Task 4 branch)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● The builder has finished Task 4, and api-reviewer is now checking it.
+
+  Builder's result: one local commit on task/4-weekly-insight; nothing has been
+  pushed.
+  - Size: 270 lines added and 4 removed, across service.py, routes.py and a new
+    test file.
+  - Checks: lint and the format check are clean, and all 40 tests pass.
+  - Seeded database: account 6 for week 2026-06-01 returns a total of 880, usual
+    66.0, a band of 27.1–104.9 and higher_than_usual, exactly as G3 in the plan
+    expects. Week 2026-06-02 returns 422. Account 20 returns 200 in the empty
+    shape.
+  - Tests:
+    - required: S2, V4 and V5;
+    - the three 422 messages, plus a malformed date;
+    - an account with no events, and an empty dataset;
+    - a real unreachable-DB test;
+    - the duplicate and UTC data notes.
+
+  Decisions the builder made that the plan didn't specify:
+  - Errors: the service raises its own error type, and the route turns it into
+    an HTTP error. That keeps FastAPI out of the service.
+  - Validation order: first "not a Monday", then "before the first complete
+    week", then "not complete yet".
+  - Baseline fields: baseline.weeks_used, start and end still show the history
+    weeks that were found when the verdict is "not enough history". For example,
+    B1 would show 3 weeks, and an account with no events shows 0. I think this
+    matches the plan, and I've asked the reviewer to confirm it.
+  - Unreachable DB: this endpoint returns 500, the same as /accounts.
+
+  Reviewer checks: I asked the reviewer to check all the seed results from the
+  plan (G2–G8) against Postgres with curl, including the 15 locations and Site A
+  for account 6. It will also test the duplicate count with a duplicate event
+  near local midnight, and confirm that every response field matches the
+  contract. I'll tell you the verdict when it's done.
+
+✻ Baked for 18s · done Tuesday 8:49 PM
+
+● Agent "Review PLAN.md Task 4 branch" finished · 2m 26s
+
+● The reviewer approved. Some of the surviving mutations will be caught later
+  anyway: G3's band of 27.1–104.9 checks the rounding, and G8 (account 1 at its
+  first complete week) checks the <= boundary. But three of them aren't covered
+  by any scenario in section 4, so I'm having the builder close those gaps now,
+  as in Tasks 2 and 3.
+  ⎿  Resuming agent af485ce
+
+● The reviewer approved Task 4 with no blocking findings, and I've sent the
+  builder back to close five test gaps first.
+
+  What passed:
+  - Lint, tests and seed numbers: lint is clean and all 40 tests pass. On
+    Postgres, every seed result in the plan (G2–G8) matches. In G3 all 15 of
+    account 6's locations are "higher", and Site A has 49 events against a usual
+    of 4.5. Account 18 shows the UTC note, and account 20 has an empty
+    baseline.
+  - Errors: the reviewer triggered them for real. The three 422 messages and the
+    404 match the plan word for word. With the DB stopped, the endpoint
+    returned 500, and it returned 200 again after a restart.
+  - Builder's decisions: the reviewer agreed with both the validation order and
+    showing the history weeks found even for "not enough history".
+
+  Gaps I'm closing now. The reviewer found code changes that no test caught:
+  1. Rounding: usual to 2 decimals instead of 1, and pct to 2 instead of 3. A
+     case with non-round numbers will catch this.
+  2. First complete week: a request for exactly that week must return 200, not
+     422 (< vs <=).
+  3. Duplicates near local midnight: a duplicate at Sunday 23:30 Chicago time,
+     which is already Monday in UTC, must count in that week's data note, not
+     the next one's.
+  4. Daily usual values: these must be null when the verdict is "not enough
+     history".
+  5. The dataset's first week: this must come from the local date, not the UTC
+     date.
+
+  Section 4's scenarios would only have covered parts of items 1 and 2 later.
+  The other three, all timezone and gating rules, wouldn't have been tested
+  anywhere. The fix is tests only, with each change confirmed to fail and then
+  reverted. I'm skipping the reviewer's nit that week_start also accepts a
+  datetime string.
+
+  I'll check the fix when the builder reports, then pass you the command to open
+  the PR.
+
+✻ Baked for 24s · done Tuesday 8:51 PM
+
+● Agent "Implement PLAN.md Task 4" finished · 2m 2s
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Task 4 is ready for you to open the PR. On the host, run:
+
+  .pr/4/create-pr.sh
+
+  The branch task/4-weekly-insight has two local commits:
+  - f942f3a: the weekly-insight endpoint. The reviewer approved it, and the seed
+    results G2–G8 match on Postgres.
+  - b00b921: tests for the gaps. I confirmed it only adds to the test file (+54
+    lines), and app/ is unchanged.
+
+  I re-ran the checks: lint is clean and all 45 tests pass. The PR is 328
+  changed lines. I added a follow-up note to .pr/4/review.md. The only warning
+  left is the httpx one you've accepted.
+
+  What the new tests cover. Each code change below now fails a test:
+  - rounding pct and the band to fewer decimals;
+  - < vs <= at the first complete week;
+  - the end of the week in the duplicate note;
+  - counting duplicates by UTC date instead of local date;
+  - removing the "not enough history" null on daily usual values;
+  - taking the first complete week from the UTC date.
+
+  One of my examples was wrong, and the builder caught it. I suggested an
+  account whose first event is at Sunday 23:30 Chicago time to show that the
+  first week comes from the local date. In that case local and UTC both give the
+  same next Monday, so the test couldn't tell them apart. The builder used
+  Tokyo instead: Tue 00:30 local is Monday in UTC, so a request for 07-06 gets a
+  422 and 07-13 gets a 200. I've noted this for ai-log/notes.md as a time the
+  AI was wrong.
+
+  One mutation can't be caught, and that's fine. Rounding usual to 2 decimals
+  instead of 1 always gives the same value. A median of whole counts always ends
+  in .0 or .5.
+
+  Once you've merged and pulled, tell me and I'll start Task 5: the API
+  container and the exported openapi.json contract.
+
+✻ Sautéed for 7m 25s · done Tuesday 8:54 PM
+
+❯ merged. continue with task 5                                                  
+
+  Ran 1 shell command (ctrl+o to expand)
+● Before Task 5, I'm creating ai-log/notes.md as PLAN.md section 1 requires; it
+  stays untracked until Task 14 commits the AI log.
+
+● Write(ai-log/notes.md)
+  ⎿  Wrote 30 lines to ai-log/notes.md
+      1 # Orchestrator notes (raw material for Task 14)
+      2 
+      3 These notes are kept after each review (PLAN.md section 1, step 5
+        ). Each entry records what the AI got wrong, what review caught, 
+        and what the human accepted, rejected or redirected.
+      4 
+      5 ## Task 1: API skeleton, clean view, health, test harness (PR #2)
+      6 - **Caught by review (blocking):** `/health` returned 500 instead
+         of 503 when the DB was down. The builder only tested "ping raise
+        s", but the real connection was opened in the `get_connection` de
+     … +25 lines (~3 KB) (ctrl+o to expand)
+
+● api-builder(Implement PLAN.md Task 5)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+  ⎿  Message queued for delivery to a798ac00b0220b0f8 at its next tool 
+     round. Sending this moved nothing it is running to the background just
+     now, so the message waits for that round unless something moves 
+     sooner. If it finishes first, it is resumed with the message and 
+     notifies again, so wait for that notification before resending.
+
+● api-builder is now working on Task 5, on the branch task/5-api-container from
+  main at 67e3b56, the merge of PR #6.
+
+  Before starting it, I wrote ai-log/notes.md. PLAN.md says the orchestrator
+  keeps these notes after each review, and I hadn't been doing it. It now covers
+  Tasks 1–4 and the agent PR:
+  - what each review caught;
+  - your decisions (parking the agent rules, "S4 only", keeping httpx);
+  - the times the AI was wrong, including my Chicago example in Task 4.
+
+  The file stays untracked until Task 14. I've told the builder not to stage it.
+
+  Task 5 covers:
+  - an API Dockerfile on a pinned python:3.13-slim patch tag, with the seed file
+    copied in;
+  - an entrypoint that runs the migrations, loads the seed if the DB is empty,
+    then starts uvicorn;
+  - an api service in compose with a healthcheck on /health;
+  - scripts/export_openapi.py, plus a test that fails when the committed
+    openapi.json is out of date and says which command regenerates it.
+
+  I added three things the plan doesn't spell out:
+  - a .dockerignore, so .venv, node_modules, the starter files and .pr/ stay out
+    of the image;
+  - a CLAUDE.md note on starting only the db (docker compose up -d --wait db),
+    since compose will now start the API too;
+  - why-comments in the Dockerfile, entrypoint and compose file.
+
+  When the builder finishes, I'll run the reviewer on the branch and give you
+  the verdict.
+
+✻ Brewed for 43s · done 10:53 AM
+
+● Agent "Implement PLAN.md Task 5" finished · 1m 49s
+
+● api-reviewer(Review PLAN.md Task 5 branch)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● The builder has finished Task 5, and api-reviewer is now checking it.
+
+  What the builder did: one local commit on task/5-api-container, 132 changed
+  lines (not counting openapi.json).
+
+  The Quickstart passed:
+  - After wiping the database, docker compose up --build brought up db and api,
+    and both were healthy.
+  - The API container ran the migrations and loaded the seed on its own.
+  - /health returned ok, and /accounts returned the accounts.
+  - The exported openapi.json matched the committed file.
+  - Lint is clean and all 46 tests pass.
+
+  The new contract test fails when openapi.json is stale, and its message tells
+  you which command regenerates the file.
+
+  Decisions the builder made:
+  - Base image: python:3.13.18-slim, the current patch tag according to docker 
+    pull.
+  - Seed path: the image keeps the repo layout (/srv/backend,
+    /srv/data/seed.sql), so seed.py didn't need any change.
+  - Entrypoint: it's run with sh, so the host's executable bit doesn't matter.
+  - API port: an optional API_PORT variable sets the published port, with 8000
+    as the default.
+  - CLAUDE.md:
+    - The commands for running only the database now use docker compose up -d 
+      --wait db.
+    - The reset command changed to match.
+    - There's a new "Full stack in Docker" section.
+
+    The reviewer is checking that these commands work.
+
+  What I asked the reviewer to check:
+  - that the tag really exists, and what ends up inside the image (no .venv,
+    .git, .pr/ or ai-log/, and the seed file byte-identical);
+  - that a restart doesn't load the seed a second time;
+  - that the healthcheck reports unhealthy when the database is stopped;
+  - that the contract test fails after a real schema change.
+
+  ai-log/notes.md is still untracked, as intended. I'll pass on the verdict when
+  the review is done.
+
+✻ Churned for 18s · done 10:55 AM
+
+● Agent "Review PLAN.md Task 5 branch" finished · 3m 48s
+
+● Bash(cat >> ai-log/notes.md <<'EOF'…)
+  ⎿  ?? ai-log/notes.md
+  ⎿  Updated ai-log/notes.md (+9 -0)
+      28  - **Caught by review (should-fix):** mutation gaps in rounding,
+           the first-week boundary, the duplicate-note end bound, duplica
+          tes counted by UTC date, weekday-usuals gating, and the first w
+          eek taken from the UTC date. They were closed with tests only.
+      29  - **AI wrong (orchestrator):** to prove "first complete week us
+          es the local date", the orchestrator suggested a first event at
+           Sun 23:30 Chicago. In that case local and UTC both give the sa
+          me next Monday, so the test couldn't tell them apart. The build
+          er caught this and used Tokyo instead (Tue 00:30 local = Mon UT
+          C).
+      30  - **Builder judgment:** it reported that rounding `usual` at 2 
+          vs 1 decimals is an equivalent mutant, because a median of inte
+          gers is always x.0 or x.5.
+      31 +                                                               
+      32 +## Task 5: API container + exported contract (PR #7, pending)  
+      33 +- **Approved with no should-fix findings**, the first clean rev
+         +iew. The reviewer:                                             
+      34 +  - verified the image contents and that the seed's sha256 is u
+         +nchanged                                                       
+      35 +  - confirmed the entrypoint is idempotent on restart and exits
+         + 1 with a bad DATABASE_URL                                     
+      36 +  - checked that `/health` returns 503 and the compose healthch
+         +eck reports unhealthy when the db is stopped                   
+      37 +  - confirmed the stale-contract test catches a real field rena
+         +me                                                             
+      38 +- **Builder judgment:** the image keeps the repo layout (`/srv/
+         +backend`, `/srv/data`), so `seed.py` needed no change. Because 
+         +`up` now also starts the api, it changed the CLAUDE.md db-only 
+         +commands to `docker compose up -d --wait db`.                  
+      39 +- **Nit, accepted:** with the db down, `/accounts` returns a pl
+         +ain 500. PLAN.md 3.5 doesn't specify that case.                
+
+● Task 5 is ready for you to open the PR. The reviewer approved it with nothing
+  to fix, the first fully clean review so far, so you can run this on the host
+  now:
+
+  .pr/5/create-pr.sh
+
+  What the reviewer checked for real:
+  - Image:
+    - The python:3.13.18-slim tag exists.
+    - The image contains only the backend runtime files and data/seed.sql, with
+      no .venv, .git, .pr, ai-log or node_modules.
+    - The seed file's sha256 matches the repo copy.
+  - Entrypoint: docker compose restart api didn't reload the seed, and the
+    counts stayed at 20 accounts and 12,626 events. A bad DATABASE_URL made the
+    container exit with an error, as it should.
+  - Database stopped: /health returned 503 with the exact body, and the compose
+    healthcheck switched to unhealthy after about 75 seconds. Everything
+    recovered after up.
+  - Contract test: renaming a real field in schemas.py made it fail, and the
+    failure message names the command that regenerates openapi.json.
+  - CLAUDE.md: docker compose up -d --wait db still starts only the database.
+  - Checks: lint is clean and all 46 tests pass.
+
+  There were two nits, and neither needs action. One comment column in CLAUDE.md
+  is misaligned. With the database down, /accounts returns a plain 500, which
+  the plan doesn't cover and which comes from an earlier task. The stack is
+  still up and seeded, and I've added Task 5 to ai-log/notes.md.
+
+  Once you've merged and pulled, tell me and I'll start Task 6, the first set of
+  API scenario tests: S1–S4 and the boundary cases B1–B8.
+
+✻ Cooked for 6m 34s · done 10:59 AM
+
+❯ merged, continue with task 6                                                  
+
+● Bash(git branch --show-current && git status --short && git log --oneline -1
+      && ls backend/tests/integration && sed -i 's/(PR #7, pending)/(PR #7)/'
+      ai-log/notes.md)
+  ⎿  main
+     ?? ai-log/notes.md
+     21675f7 Merge pull request #7 from gonzalezmauricioalan-folderit/task/
+     … +8 lines (ctrl+o to expand)
+  ⎿  Updated ai-log/notes.md (+1 -1)
+      29  - **AI wrong (orchestrator):** to prove "first complete week us
+          es the local date", the orchestrator suggested a first event at
+           Sun 23:30 Chicago. In that case local and UTC both give the sa
+          me next Monday, so the test couldn't tell them apart. The build
+          er caught this and used Tokyo instead (Tue 00:30 local = Mon UT
+          C).
+      30  - **Builder judgment:** it reported that rounding `usual` at 2 
+          vs 1 decimals is an equivalent mutant, because a median of inte
+          gers is always x.0 or x.5.
+      31  
+      32 -## Task 5: API container + exported contract (PR #7, pending)  
+      32 +## Task 5: API container + exported contract (PR #7)           
+      33  - **Approved with no should-fix findings**, the first clean rev
+          iew. The reviewer:
+      34    - verified the image contents and that the seed's sha256 is u
+          nchanged
+      35    - confirmed the entrypoint is idempotent on restart and exits
+           1 with a bad DATABASE_URL
+
+● api-builder(Implement PLAN.md Task 6)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● api-builder is now working on Task 6, on a new branch
+  task/6-scenario-tests-core from main at 21675f7, the merge of PR #7.
+
+  This task is tests only, in two new files:
+  - test_scenarios_core.py covers S1–S4, with S3a and S3b as separate tests. S4
+    is named exactly test_s4_locations_need_review, because the Quickstart runs
+    it by that name.
+  - test_boundaries.py covers B1–B8.
+
+  Each test checks every expected value in its section 4 row, using the rounded
+  figures the API returns. For S4, that includes the location order (East,
+  South, North, West) and the account summary staying "normal", with a lower
+  bound of 57.6.
+
+  I set three rules for the builder:
+  - App bugs: if a scenario fails because of an app bug, a fix under 50 lines
+    goes in as a separate fix(api) commit. A larger fix means it stops and
+    reports.
+  - Expected values: if it thinks one of the plan's expected values is wrong, it
+    stops and reports the numbers. It doesn't change the expectation.
+  - Mutation check: it runs one on service.py, detection.py and ranking.py
+    against the new tests, and lists what survived in the PR body.
+
+  When it finishes, I'll run the reviewer on the branch and give you the
+  verdict.
+
+✻ Cooked for 25s · done 11:08 AM
+
+● Agent "Implement PLAN.md Task 6" finished · 26m 50s
+
+● api-reviewer(Review PLAN.md Task 6 branch)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● The builder has finished Task 6, and api-reviewer is checking it now.
+
+  Builder's result: one local commit on task/6-scenario-tests-core, 255 lines,
+  tests only. All of the plan's expected values passed on the first run, so the
+  app needed no fixes.
+
+  - Tests: S1, S2, S3a, S3b, S4 and B1–B8 each have one test, and each test
+    checks every value in its section 4 row. Lint is clean. The new files give
+    18 passing tests, and test_s4_locations_need_review passes when run on its
+    own.
+  - Extra tests: the builder added five edge cases the plan doesn't list:
+    - exactly 4 history weeks;
+    - a value exactly at the upper bound;
+    - exactly +20%;
+    - usual exactly at the low-volume cutoff;
+    - no daily usual values when there isn't enough history.
+  - Mutation check: the builder tried 45 small changes to the code against the
+    new tests. 38 were caught and 7 were not:
+    - 2 it says can't be caught, because the change doesn't alter behavior
+      (value > 0 → True, and diff > 0 → diff >= 0);
+    - 4 it left for Task 7, because they need spike, location or validation
+      scenarios from that task (mean instead of median, NOT_ENOUGH ranked too
+      early, the first-week boundary);
+    - 1 that can't show up: usual always ends in .0 or .5, so rounding it to 2
+      digits never changes the result.
+
+  What I asked the reviewer to check:
+  - that each test builds exactly its row's setup, especially B1 and B3/B4;
+  - whether the two "can't be caught" claims hold up;
+  - that the five extra tests are correct and not redundant;
+  - for the four changes left for Task 7: the builder only ran them against its
+    new files. The tests from Tasks 2 and 4 probably catch some already (Task 4
+    added a first-week boundary test). So I asked the reviewer to run the full
+    suite against them and report which are really still uncaught.
+
+  I'll give you the verdict when the review is done.
+
+✻ Brewed for 26s · done 11:35 AM
+
+● Agent "Review PLAN.md Task 6 branch" finished · 7m 15s
+
+● Bash(cat >> .pr/6/review.md <<'EOF'…)
+  ⎿  ?? ai-log/notes.md
+  ⎿  Updated ai-log/notes.md (+6 -0)
+      37    - confirmed the stale-contract test catches a real field rena
+          me
+      38  - **Builder judgment:** the image keeps the repo layout (`/srv/
+          backend`, `/srv/data`), so `seed.py` needed no change. Because 
+          `up` now also starts the api, it changed the CLAUDE.md db-only 
+          commands to `docker compose up -d --wait db`.
+      39  - **Nit, accepted:** with the db down, `/accounts` returns a pl
+          ain 500. PLAN.md 3.5 doesn't specify that case.
+      40 +                                                               
+      41 +## Task 6: API scenario tests S1–S4, B1–B8 (PR #8, pending)    
+      42 +- **Plan values held:** every section 4 expectation passed on t
+         +he first run, with no app fixes.                               
+      43 +- **Builder:** ran 45 manual mutants and added 5 edge tests bey
+         +ond the catalog. It deferred 4 survivors to Task 7, judging onl
+         +y against its own new files.                                   
+      44 +- **Orchestrator asked the reviewer to re-run the deferred surv
+         +ivors against the full suite.** Of the 4, 3 were already killed
+         + by the Task 2/4 tests, and only `history[1:]` in the MAD is re
+         +ally uncaught.                                                 
+      45 +- **AI wrong (reviewer):** it proposed fixing the `usual` 2-dig
+         +it rounding mutant with "a usual that isn't x.0/x.5". That's im
+         +possible, because a median of integers always ends in .0 or .5,
+         + which Task 4 had already established. The reviewer also propos
+         +ed moving R1's outlier, which would change a plan scenario. The
+         + orchestrator rejected both, and the MAD mutant goes to a separ
+         +ate extra test in Task 7.                                      
+
+● Task 6 is ready for you to open the PR. On the host, run:
+
+  .pr/6/create-pr.sh
+
+  The reviewer approved it with no blocking findings:
+  - Fidelity: each S1–S4 and B1–B8 test builds the exact setup from its section
+    4 row and checks every expected value. That includes B1's late series start,
+    B3/B4's single event 9 weeks earlier, and S4's four locations.
+  - Checks: lint is clean, all 64 tests pass, and the PR is 255 lines.
+  - The builder's 5 extra edge tests: correct, and kept because they caught real
+    mutations.
+  - The two mutations the builder called uncatchable: both claims are right.
+    Neither change alters behavior.
+  - The 4 mutations the builder left for Task 7: I had the reviewer run them
+    against the full suite. 3 are already caught by tests from Tasks 2 and 4.
+    Only one is really uncaught: dropping the oldest history week when computing
+    the MAD.
+
+  I overruled two of the reviewer's suggestions and wrote a note in
+  .pr/6/review.md explaining why:
+  1. Rounding usual to 2 digits: it suggested a test with a usual that doesn't
+     end in .0 or .5. That can't happen, because the median of whole counts
+     always ends in .0 or .5. Task 4 already established this, so there's
+     nothing to test.
+  2. Moving R1's 300 outlier to the front: that would change a scenario from the
+     plan. Instead, Task 7 will get one separate extra test where the oldest
+     week changes the MAD, which catches the remaining mutation.
+
+  So this PR needs no changes. I've added both points to ai-log/notes.md.
+
+  Once you've merged and pulled, tell me and I'll start Task 7: R1–R7, V1–V7 and
+  the seed golden tests G1–G8. The extra MAD test will be part of it.
+
+✻ Cooked for 35m 3s · done 11:43 AM
+
+❯ merged, continue with task 7                                                  
+
+● Bash(git branch --show-current && git status --short && git log --oneline -1
+      && sed -i 's/(PR #8, pending)/(PR #8)/' ai-log/notes.md)
+  ⎿  main
+     ?? ai-log/notes.md
+     2002fbf Merge pull request #8 from gonzalezmauricioalan-folderit/task/
+     6-scenario-tests-core
+  ⎿  Updated ai-log/notes.md (+1 -1)
+      38  - **Builder judgment:** the image keeps the repo layout (`/srv/
+          backend`, `/srv/data`), so `seed.py` needed no change. Because 
+          `up` now also starts the api, it changed the CLAUDE.md db-only 
+          commands to `docker compose up -d --wait db`.
+      39  - **Nit, accepted:** with the db down, `/accounts` returns a pl
+          ain 500. PLAN.md 3.5 doesn't specify that case.
+      40  
+      41 -## Task 6: API scenario tests S1–S4, B1–B8 (PR #8, pending)    
+      41 +## Task 6: API scenario tests S1–S4, B1–B8 (PR #8)             
+      42  - **Plan values held:** every section 4 expectation passed on t
+          he first run, with no app fixes.
+      43  - **Builder:** ran 45 manual mutants and added 5 edge tests bey
+          ond the catalog. It deferred 4 survivors to Task 7, judging onl
+          y against its own new files.
+      44  - **Orchestrator asked the reviewer to re-run the deferred surv
+          ivors against the full suite.** Of the 4, 3 were already killed
+           by the Task 2/4 tests, and only `history[1:]` in the MAD is re
+          ally uncaught.
+
+● api-builder(Implement PLAN.md Task 7)  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● I've started api-builder on Task 7, the last backend task. It's on the branch
+  task/7-scenario-tests-robustness, from main at 2002fbf (the PR #8 merge).
+
+  It adds three test files:
+  - test_robustness.py: R1–R7. These cover the spike in the history, duplicates,
+    a new location, the week and DST edges, Phoenix and UTC.
+  - test_validation.py: V1–V7. These cover the error messages, the default week,
+    the 7 days, the broken DB and /accounts.
+  - test_seed_golden.py: G1–G8 against the real seed, marked slow. The seed is
+    loaded once per module.
+
+  The plan's V7 doesn't fit the current code, and I've made the call on it:
+  - The mismatch: the plan says to test /health by overriding the database
+    dependency so it raises. Since the Task 1 fix, /health doesn't use that
+    dependency, so the override would test nothing.
+  - What I asked for: V7 will point the app at a database it can't reach, as
+    Task 1's test does, and expect the exact 503.
+  - Where it's recorded: this is the first change from the plan, so the builder
+    will create PLAN_CHANGES.md with this entry. PLAN.md itself stays frozen.
+
+  There's also one extra test, carried over from the Task 6 review. It's a case
+  where the oldest history week changes the MAD, so dropping that week now fails
+  a test. R1's setup stays exactly as the plan gives it.
+
+  The builder will also run the mutation check against the whole suite this
+  time, not just its new files, and time the full and fast test runs. When it's
+  done, I'll run the reviewer and give you the verdict.
+
+✻ Churned for 31s · done 11:49 AM
+
+● Agent "Implement PLAN.md Task 7" is waiting on its own background work · 35m 
+38s
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● The branch is clean apart from PLAN_CHANGES.md, and the only running uvicorn
+  is the compose api container. I'm starting the reviewer and asking it about
+  the daily rounding gap.
+
+● api-reviewer(Review PLAN.md Task 7 branch)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● The builder has finished Task 7, and api-reviewer is now checking it.
+
+  Builder's result: one local commit on task/7-scenario-tests-robustness, 328
+  lines. It contains the three test files and a new PLAN_CHANGES.md. All of the
+  plan's expected values passed on the first run, so the app needed no fixes.
+
+  - Tests:
+    - R1–R7, V1–V7 and G1–G8 are in.
+    - So is the extra test where the oldest history week changes the MAD, which
+      now catches that mutation.
+    - V7 uses a database the app can't reach, as I decided, and that's recorded
+      in PLAN_CHANGES.md. PLAN.md is unchanged.
+  - Run times: the full suite is 87 passing tests in about 52s, and the fast
+    suite is 77 in about 35s.
+  - Mutation check: this time against the whole suite. 66 changes were tried and
+    58 caught. Among the survivors, the only real gap is that rounding the
+    daily usual values to whole numbers isn't caught; the others don't change
+    behavior. The plan's rounding rules don't mention the daily values, so the
+    builder left it to you instead of deciding.
+
+  What I asked the reviewer to check:
+  - Fidelity: each test builds its section 4 setup exactly. For R4–R6 that
+    includes working out the time conversions by hand: the DST switch on
+    2026-03-08 and Phoenix's fixed offset.
+  - Seed tests: the seed loads only once, and the settings are restored
+    afterwards.
+  - PLAN_CHANGES.md: the entry is accurate.
+  - Daily usual values: what the service does with them now, and whether to
+    close the gap now with the smallest possible test.
+  - Fast suite time: where the 35 seconds go, and whether a slow test is missing
+    its slow mark.
+
+  I'll give you the verdict when the review is done.
+
+✻ Cooked for 30s · done 12:25 PM
+
+● Agent "Review PLAN.md Task 7 branch" finished · 6m 27s
+
+● The reviewer approved Task 7. Its one should-fix is the gap the builder
+  raised: rounding the daily usual values isn't tested. It has a verified fix of
+  about 4 lines, so I'm sending that to the builder now. I'm skipping the R5
+  nit, because the Task 2 unit test already covers local_date across the DST
+  switch, and R5's setup comes from the plan as written.
+  ⎿  Resuming agent a93b03a
+
+● The reviewer approved Task 7 with no blocking findings. The one remaining item
+  is a 4-line test, which the builder is adding now.
+
+  What passed:
+  - Fidelity: R1–R7, V1–V7 and G1–G8 all match section 4 exactly, checked row by
+    row.
+    - For R4–R6, the reviewer worked out the local-to-UTC conversions by hand.
+    - In R2, the duplicate really is an exact copy.
+    - G3 checks all 15 locations, including Site A at 49 events against a usual
+      of 4.5.
+  - Live error paths: on the running stack, the reviewer triggered the three
+    422s, the 404 for account 999, and the 503 with the database stopped. All
+    match the plan, and the database is running again.
+  - Other checks:
+    - The PLAN_CHANGES.md entry for V7 is accurate, and PLAN.md is unchanged.
+    - The extra MAD test does its job: dropping the oldest week, or the newest,
+      now fails it.
+    - The seed is loaded only once for the golden tests.
+
+  What I sent back: the daily usual values aren't covered by any test, so
+  rounding them to whole numbers would go unnoticed. The fix is a history of
+  [20,21,20,21,…], then a check that Monday's usual is 20.5. The reviewer has
+  already confirmed that this test fails under the rounding change.
+
+  What I skipped: the reviewer noted that R5 would also pass with a fixed UTC−6
+  offset, so it doesn't really test DST. But R5's setup comes from the plan as
+  written, and the Task 2 unit test already checks the DST switch on 2026-03-08.
+
+  On speed: the fast test run takes about 30s. Most of that is inserting events
+  one at a time in B6/B7 from Task 6. Nothing is missing its slow mark.
+
+  Once the builder's commit is in and I've checked it, Task 7 is ready for
+  .pr/7/create-pr.sh. That completes the backend.
+
+✻ Cogitated for 17s · done 12:32 PM
+
+● Agent "Implement PLAN.md Task 7" is waiting on its own background work · 43m 
+51s
+
+● Bash(git status --short && git log --oneline main..HEAD && git diff --stat
+      HEAD~1 HEAD && cd backend && .venv/bin/ruff check . -q && .venv/bin/pytest
+      -q -m "not slow…)
+  ⎿  ?? ai-log/notes.md
+     153b994 test(api): pin days[].usual rounding to one digit
+     6c4e229 test(api): robustness R1-R7, validation V1-V7, seed golden G1-
+     … +4 lines (ctrl+o to expand)
+  ⎿  Updated ai-log/notes.md (+7 -0)
+      43  - **Builder:** ran 45 manual mutants and added 5 edge tests bey
+          ond the catalog. It deferred 4 survivors to Task 7, judging onl
+          y against its own new files.
+      44  - **Orchestrator asked the reviewer to re-run the deferred surv
+          ivors against the full suite.** Of the 4, 3 were already killed
+           by the Task 2/4 tests, and only `history[1:]` in the MAD is re
+          ally uncaught.
+      45  - **AI wrong (reviewer):** it proposed fixing the `usual` 2-dig
+          it rounding mutant with "a usual that isn't x.0/x.5". That's im
+          possible, because a median of integers always ends in .0 or .5,
+           which Task 4 had already established. The reviewer also propos
+          ed moving R1's outlier, which would change a plan scenario. The
+           orchestrator rejected both, and the MAD mutant goes to a separ
+          ate extra test in Task 7.
+      46 +                                                               
+      47 +## Task 7: API scenario tests R1–R7, V1–V7, G1–G8 (PR #9, pendi
+         +ng)                                                            
+      48 +- **Plan values held:** every section 4 expectation passed on t
+         +he first run, with no app fixes.                               
+      49 +- **First plan change:** the plan's V7 ("dependency override th
+         +at raises") no longer worked, because the Task 1 fix moved `/he
+         +alth` off the dependency. The orchestrator decided to use an un
+         +reachable DB instead, which is recorded in `PLAN_CHANGES.md`.  
+      50 +- **Builder escalated correctly:** rounding `days[].usual` surv
+         +ives the whole suite, and section 2 doesn't specify it. The bui
+         +lder left the call to the human instead of widening scope. The 
+         +reviewer confirmed the gap, and it was closed with a 4-line tes
+         +t.                                                             
+      51 +- **Nit rejected:** "R5 doesn't depend on DST". R5's setup is t
+         +he plan's, and the DST switch is covered by the Task 2 unit tes
+         +t.                                                             
+      52 +- **Backend complete:** 88 tests (78 fast). The full suite take
+         +s about 33s; the fast loop's cost is per-event inserts in B6/B7
+         +.                                                              
+
+● Task 7 is ready for you to open the PR, and it's the last backend task. On the
+  host, run:
+
+  .pr/7/create-pr.sh
+
+  The branch task/7-scenario-tests-robustness has two local commits:
+  - 6c4e229: the R1–R7, V1–V7 and G1–G8 tests, plus PLAN_CHANGES.md. The
+    reviewer approved it and found no differences from section 4.
+  - 153b994: the daily-usual rounding test (+6 lines, tests only). It checks for
+    20.5 and fails if the value is rounded to a whole number.
+
+  I re-checked the branch myself: lint is clean and the 78 fast tests pass. The
+  builder reports 88 passing in the full suite. The PR is 334 lines. I added a
+  follow-up to .pr/7/review.md saying why the R5 nit was skipped, and recorded
+  the task in ai-log/notes.md.
+
+  Where the backend stands after this PR:
+  - All three endpoints are built, and they run in Docker with the migrations
+    and seed applied automatically.
+  - The openapi.json contract is committed, and a test fails if it goes stale.
+  - Every backend scenario in section 4 (S, B, R, V, G) passed on the first run
+    without any app changes.
+  - One change from the plan (V7), recorded in PLAN_CHANGES.md.
+
+  Once you've merged and pulled, Task 8 starts the frontend. It's the first task
+  for frontend-builder and frontend-reviewer, which haven't been run yet. Their
+  definitions already include the six rules from PR #4. Task 8 is the
+  Vite/React scaffold, the API client generated from openapi.json, the account
+  and week pickers, and saving the selection in localStorage. Tell me when
+  you're ready.
+
+✻ Brewed for 45m 13s · done 12:34 PM
+
+❯ merged, continue with task 8                                                  
+
+● Bash(git branch --show-current && git status --short && git log --oneline -1
+      && sed -i 's/(PR #9, pending)/(PR #9)/' ai-log/notes.md; bash -l -c "node
+      --version; npm…)
+  ⎿  main
+     ?? ai-log/notes.md
+     1c2429d Merge pull request #9 from gonzalezmauricioalan-folderit/task/
+     … +20 lines (ctrl+o to expand)
+  ⎿  Updated ai-log/notes.md (+1 -1)
+      44  - **Orchestrator asked the reviewer to re-run the deferred surv
+          ivors against the full suite.** Of the 4, 3 were already killed
+           by the Task 2/4 tests, and only `history[1:]` in the MAD is re
+          ally uncaught.
+      45  - **AI wrong (reviewer):** it proposed fixing the `usual` 2-dig
+          it rounding mutant with "a usual that isn't x.0/x.5". That's im
+          possible, because a median of integers always ends in .0 or .5,
+           which Task 4 had already established. The reviewer also propos
+          ed moving R1's outlier, which would change a plan scenario. The
+           orchestrator rejected both, and the MAD mutant goes to a separ
+          ate extra test in Task 7.
+      46  
+      47 -## Task 7: API scenario tests R1–R7, V1–V7, G1–G8 (PR #9, pendi
+         -ng)                                                            
+      47 +## Task 7: API scenario tests R1–R7, V1–V7, G1–G8 (PR #9)      
+      48  - **Plan values held:** every section 4 expectation passed on t
+          he first run, with no app fixes.
+      49  - **First plan change:** the plan's V7 ("dependency override th
+          at raises") no longer worked, because the Task 1 fix moved `/he
+          alth` off the dependency. The orchestrator decided to use an un
+          reachable DB instead, which is recorded in `PLAN_CHANGES.md`.
+      50  - **Builder escalated correctly:** rounding `days[].usual` surv
+          ives the whole suite, and section 2 doesn't specify it. The bui
+          lder left the call to the human instead of widening scope. The 
+          reviewer confirmed the gap, and it was closed with a 4-line tes
+          t.
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● frontend-builder(Implement PLAN.md Task 8)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● frontend-builder is now working on Task 8. This is its first run, on a new
+  branch task/8-frontend-skeleton from main at 1c2429d (the merge of PR #9).
+
+  Node 22.22.1 is installed in the sandbox. The wireframe the frontend agents
+  refer to is the "Wireframe — DECIDED" section in PLAN_first_iteration.md.
+
+  Task 8 covers:
+  - the frontend/ scaffold;
+  - schema.d.ts generated from openapi.json, plus client.ts, the hooks,
+    format.ts and storage.ts;
+  - the account and week pickers;
+  - a basic App.tsx that shows the total and status as plain text for now.
+
+  The tests are F8, F9 and F11–F13 run through MSW, plus unit tests for
+  format.ts.
+
+  These are the instructions I gave the builder beyond the plan:
+  - Libraries: pin each to its latest version, but check that they work
+    together, for example vitest with jsdom and eslint with typescript-eslint.
+    If they conflict, use the newest set that installs cleanly and list it in
+    the PR.
+  - Stale responses: cancel requests with AbortSignal when the selection
+    changes, so an old response never replaces a newer one.
+  - Missing latest_complete_week: if an account has none, pick the simplest
+    behavior that fits the plan and record it as a decision.
+  - Unhandled requests: MSW fails a test on any request it doesn't expect, so no
+    test can quietly hit a real API.
+  - Comments: the configs get why-comments, and the storage.ts validation gets a
+    diagram plus one worked example from F12.
+
+  When the builder finishes, I'll run frontend-reviewer on the branch and give
+  you the verdict.
+
+✻ Cogitated for 39s · done 12:42 PM
+
+● Agent "Implement PLAN.md Task 8" is waiting on its own background work · 22m 
+1s
+
+● frontend-reviewer(Review PLAN.md Task 8a/8b stack)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● Agent "Implement PLAN.md Task 8" is waiting on its own background work · 22m 
+5s
+
+● The builder has finished Task 8, and frontend-reviewer is now checking it.
+
+  The task came to 909 changed lines, over the 700 limit, so the builder split
+  it into two stacked PRs, as PLAN.md describes:
+
+  Branch: task/8a-frontend-scaffold
+  Base: main
+  Lines: 644
+  Contents: Scaffold and configs with comments, the generated schema.d.ts, the
+  client, the hooks, format.ts, storage.ts, the test setup, the CLAUDE.md
+  commands, and a placeholder App.tsx
+  ────────────────────────────────────────
+  Branch: task/8b-frontend-pickers
+  Base: 8a
+  Lines: 304
+  Contents: The pickers, StateMessage, the real App.tsx, and the F8/F9/F11–F13
+  tests
+
+  On both branches lint and the build are clean and schema.d.ts regenerates with
+  no diff. The tests pass: 9 on 8a and 21 on 8b.
+
+  Your decision: five packages that aren't in PLAN.md 3.1. The builder added
+  @types/react, @types/react-dom, @testing-library/dom, @eslint/js and globals,
+  without stopping to ask. The plan says it should have asked first. They are
+  all dev-only: type definitions, or peer dependencies of libraries the plan
+  does list. None of them adds runtime code to the app. My recommendation is to
+  accept them and record them in PLAN_CHANGES.md. I've asked the reviewer to
+  confirm that each one is really required.
+
+  Other points the reviewer is checking:
+  - TypeScript: pinned to 5.9.3 instead of the newest version. The builder says
+    the peer ranges of typescript-eslint and openapi-typescript force this.
+  - MSW: the builder says that in the installed version onUnhandledRequest was
+    renamed to onUnhandledFrame, and that the old name silently does nothing. If
+    that's true, the builder caught a trap: tests could have hit a real API
+    without failing. The reviewer will check it against the installed package.
+  - Builder decisions:
+    - An extra file, hooks/useRequest.ts, shares the cancel and reload logic
+      between the two hooks.
+    - An account with no complete week hides the week picker and shows "No
+      complete week yet for this account."
+  - Warnings left alone: npm ci warns that jsdom's dependencies want Node
+    22.22.2, one patch newer than the sandbox's 22.22.1. Task 12's pinned
+    node:22 image will remove that. There are also 13 moderate npm audit
+    advisories in transitive dev dependencies.
+
+  I've asked the reviewer to run the date tests under the Los Angeles and Tokyo
+  timezones, to check that a stale response can't overwrite a newer one, and to
+  load the app against the real API. I'll give you both verdicts when it's done.
+  After that, you'd run .pr/8a/create-pr.sh and then .pr/8b/create-pr.sh.
+
+✻ Worked for 35s · done 1:04 PM
+
+● Agent "Implement PLAN.md Task 8" is waiting on its own background work · 23m 
+16s
+
+● The builder's last message was only a timer finishing, so nothing has changed.
+  The reviewer is still checking the 8a and 8b branches, and I'll share both
+  verdicts and its view on the five extra packages when it's done.
+
+✻ Worked for 6s · done 1:05 PM
+
+● Agent "Implement PLAN.md Task 8" is waiting on its own background work · 25m 
+11s
+
+● That was another leftover timer from the builder, with nothing new. The
+  reviewer is still checking 8a and 8b.
+✻ Worked for 4s · done 1:07 PM
+
+● Agent "Implement PLAN.md Task 7" is waiting on its own background work · 1h 
+32m 36s
+
+● That was a leftover background loop from the Task 7 builder, and PR #9 is
+  already merged. To be safe, I'll check that the loop didn't leave any mutated
+  files behind.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Agent "Implement PLAN.md Task 7" finished · 1h 32m 51s
+
+● The working tree is clean, so the leftover loop didn't change any files. The
+  Task 7 builder has now fully stopped. The checkout is on
+  task/8b-frontend-pickers because the reviewer is working there. I'm still
+  waiting for its verdicts on 8a and 8b.
+
+✻ Cooked for 28s · done 1:22 PM
+
+● Agent "Review PLAN.md Task 8a/8b stack" finished · 27m 43s
+
+● Both 8a and 8b were approved with no blocking findings, but the reviewer
+  listed several should-fix items. I'm sending those to the builder now. The
+  extra-library question is yours to decide, and I'll ask you below.
+  ⎿  Resuming agent aa61208
+
+● User answered Claude's questions:
+  ⎿  · Task 8's builder added 5 dev packages that PLAN.md 3.1 doesn't list. The 
+     reviewer checked each one: @types/react-dom is needed or tsc fails. 
+     @types/react and @testing-library/dom are required peers of Testing 
+     Library. @eslint/js is used by the eslint config. globals isn't needed, 
+     because lint passes without it. All are dev-only, with no runtime code. 
+     What should happen with them? → Keep 4, drop globals (Recommended)
+  ⎿  Message queued for delivery to aa61208eb06440335 at its next tool 
+     round. Moved 1 running tool call to the background without stopping 
+     it, so that round no longer waits for it. If it finishes first, it is 
+     resumed with the message and notifies again, so wait for that 
+     notification before resending.
+
+● Your decision is with the builder: keep the four required packages, remove
+  globals, and record the change in PLAN_CHANGES.md. The builder is applying it
+  on 8a now, along with the reviewer's fixes.
+
+  Review result: both branches were approved with no blocking findings.
+  - MSW: the reviewer confirmed the builder's catch. In msw 3.0.3 the old option
+    name does nothing, so a test request reached the real API without the test
+    failing.
+  - TypeScript: 5.9.3 is the newest version the peer packages allow.
+  - Timezones: the date tests also pass under the Los Angeles and Tokyo
+    timezones.
+  - Live API: the app loads against the real API, and CORS works for port 5173.
+  - Tests: they catch the reviewer's changes to the ◀/▶ steps, the account reset
+    and the stored-selection checks.
+
+  Fixes now in progress:
+  - 8a, fixture: it gave Quiet Harbor Spa a null latest week, but the real API
+    returns 2026-07-20. The fixture will match the real API, and the null case
+    gets its own fixture.
+  - 8a, PR body: it showed 8b's test count. That will be corrected.
+  - 8b, stale responses: a slow old response could replace a newer one, and no
+    test checked it. The code itself is correct; a test is being added.
+  - 8b, stored selection: no test checked a stored selection with the wrong
+    shape. A test is being added.
+  - 8b, flaky F8 test: it failed once when the machine was busy. It will wait on
+    what's on screen instead of on timing.
+  - Line counts: both PR bodies get re-measured line counts. The reviewer
+    measured 946 lines in total, not 909.
+
+  Left for later: pressing ◀ before the first complete week gets a 422 from the
+  API and shows the generic "Couldn't load data." The plan doesn't set a lower
+  limit for ◀, so this goes under Follow-ups.
+
+  Once the builder reports, I'll check both branches. You'll then run
+  .pr/8a/create-pr.sh and .pr/8b/create-pr.sh.
+
+✻ Sautéed for 37s · done 1:34 PM
+
+● Agent "Implement PLAN.md Task 8" is waiting on its own background work · 7m 
+40s
+
+● I'll verify both branches myself, including the npm ci the builder didn't
+  re-run on 8a.
+
+● Bash(git status --short && git log --oneline main..task/8a-frontend-scaffold
+      && echo --- && git log --oneline
+      task/8a-frontend-scaffold..task/8b-frontend-pickers &&…)
+  ⎿  ?? ai-log/notes.md
+     11f81ac chore(web): drop globals, document approved extra dev packages
+      and TypeScript pin
+     … +16 lines (ctrl+o to expand)
+  ⎿  Deleted frontend/src/App.test.tsx (+0 -210)
+  ⎿  Deleted frontend/src/components/AccountPicker.tsx (+0 -22)
+  ⎿  Deleted frontend/src/components/StateMessage.tsx (+0 -23)
+  ⎿  Deleted frontend/src/components/WeekPicker.tsx (+0 -32)
+  ⎿  Updated frontend/src/App.tsx (+1 -61)
+  ⎿  … 1 more file changed
+  ⎿  (a git step in this command can move the working tree, so these may be
+     its changes, not edits) (ctrl+o to expand)
+  ⎿  (timeout 6m 40s)
+
+● Agent "Implement PLAN.md Task 8" is waiting on its own background work · 7m 
+45s
+
+● Agent "Implement PLAN.md Task 8" is waiting on its own background work · 9m 
+32s
+
+● Agent "Implement PLAN.md Task 8" is waiting on its own background work · 9m 
+42s
+
+● Agent "Implement PLAN.md Task 8" is waiting on its own background work · 9m 
+58s
+
+● Agent "Implement PLAN.md Task 8" is waiting on its own background work · 10m 
+14s
+
+● Agent "Implement PLAN.md Task 8" is waiting on its own background work · 10m 
+26s
+
+● 8a checks out: npm ci, the schema check, lint, 9 tests and the build all pass.
+  Next I'll check 8b the same way, along with its PR script.
+
+● Bash(cd /home/admin123/projects/qualitra_challenge && git checkout -q
+      task/8b-frontend-pickers && cd frontend && bash -l -c "npm ci --silent
+      2>&1 | grep -v EBADENGIN…)
+  ⎿  schema-ok
+      Test Files  2 passed (2)
+           Tests  26 passed (26)
+     … +8 lines (ctrl+o to expand)
+  ⎿  Created frontend/src/App.test.tsx (+210 -0)
+  ⎿  Updated frontend/src/App.tsx (+61 -1)
+  ⎿  Updated frontend/src/test/setup.ts (+6 -1)
+  ⎿  Created frontend/src/components/StateMessage.tsx (+23 -0)
+  ⎿  Created frontend/src/components/WeekPicker.tsx (+32 -0)
+  ⎿  … 1 more file changed
+  ⎿  (a git step in this command can move the working tree, so these may be
+     its changes, not edits) (ctrl+o to expand)
+  ⎿  (timeout 6m 40s)
+
+● Agent "Implement PLAN.md Task 8" is waiting on its own background work · 11m 
+13s
+
+● Agent "Implement PLAN.md Task 8" is waiting on its own background work · 11m 
+26s
+
+● Agent "Implement PLAN.md Task 8" is waiting on its own background work · 11m 
+31s
+
+● Agent "Implement PLAN.md Task 8" is waiting on its own background work · 11m 
+39s
+
+● Agent "Implement PLAN.md Task 8" is waiting on its own background work · 11m 
+54s
+
+● Both branches pass for me. The builder is still sending leftover timer
+  notices, and its work is done, so I'll stop it to end the noise.
+
+● Stop Task
+  ⎿  Error: No task found with ID: aa61208eb06440335
+
+● The builder had already exited, so there was nothing to stop. Next I'll record
+  the follow-ups in the review files and the notes, and log two new agent-rule
+  proposals.
+● Bash(cat >> .pr/8a/review.md <<'EOF'…)
+  ⎿  ?? ai-log/notes.md
+  ⎿  Updated ai-log/notes.md (+14 -0)
+      50  - **Builder escalated correctly:** rounding `days[].usual` surv
+          ives the whole suite, and section 2 doesn't specify it. The bui
+          lder left the call to the human instead of widening scope. The 
+          reviewer confirmed the gap, and it was closed with a 4-line tes
+          t.
+      51  - **Nit rejected:** "R5 doesn't depend on DST". R5's setup is t
+          he plan's, and the DST switch is covered by the Task 2 unit tes
+          t.
+      52  - **Backend complete:** 88 tests (78 fast). The full suite take
+          s about 33s; the fast loop's cost is per-event inserts in B6/B7
+          .
+      53 +                                                               
+      54 +## Task 8: frontend scaffold + pickers (stacked PRs 8a/8b, pend
+         +ing)                                                           
+      55 +- **First frontend run, and the first stacked split:** the task
+         + came to 909 lines, so the builder split it into 8a (scaffold, 
+         +644 lines) and 8b (pickers, 304 lines), as PLAN.md section 1 de
+         +scribes.                                                       
+      56 +- **Builder caught a trap:** in msw 3.0.3, `onUnhandledRequest`
+         + became `onUnhandledFrame`. The old name silently did nothing, 
+         +so tests could have reached the live API. The reviewer confirme
+         +d it: a throwaway request got through to the real API.         
+      57 +- **The builder broke a rule:** it added 5 dev packages that ar
+         +en't in PLAN.md 3.1 (`@types/react`, `@types/react-dom`, `@test
+         +ing-library/dom`, `@eslint/js`, `globals`) without stopping to 
+         +ask. The reviewer checked each one. The human kept the 4 requir
+         +ed ones and dropped `globals`, recorded as `PLAN_CHANGES.md` en
+         +try 2. TypeScript is pinned to 5.9.3, because peer ranges force
+         + it.                                                           
+      58 +- **Caught by review (should-fix):**                           
+      59 +  - AbortSignal cancellation had no test; the code was correct.
+      60 +  - Storage shape validation had no test.                      
+      61 +  - A fixture contradicted the real API (account 20 had a null 
+         +week).                                                         
+      62 +  - One F8 test was flaky under load.                          
+      63 +  - The PR bodies had wrong test totals and line counts.       
+      64 +                                                               
+      65 +  All were fixed, and 8b was rebased onto 8a.                  
+      66 +- **Agent noise:** after finishing, the builder sent about 15 l
+         +eftover "timer finished" notifications.                        
+
+● Task 8 is ready. Both stacked PRs passed my own re-run. Run these on the host,
+  in this order:
+
+  .pr/8a/create-pr.sh     # task/8a-frontend-scaffold → main
+  .pr/8b/create-pr.sh     # task/8b-frontend-pickers  → 
+  task/8a-frontend-scaffold
+
+  ┌───────────────────────────────┬───────┬─────────────────────────────────┐
+  │            Branch             │ Lines │           My re-check           │
+  ├───────────────────────────────┼───────┼─────────────────────────────────┤
+  │ 8a (scaffold, client, hooks,  │ 668   │ npm ci, schema check, lint, 9   │
+  │ format, storage)              │       │ tests and build all pass        │
+  ├───────────────────────────────┼───────┼─────────────────────────────────┤
+  │ 8b (pickers, App,             │ 356   │ Same checks, 26 tests pass,     │
+  │ F8/F9/F11–F13)                │       │ rebased onto the updated 8a     │
+  └───────────────────────────────┴───────┴─────────────────────────────────┘
+
+  What changed since the review:
+  - 8a: the accounts fixture now matches the real API, and globals is removed.
+    PLAN_CHANGES.md entry 2 records the four packages you approved and the
+    TypeScript 5.9.3 pin.
+  - 8b: two new tests. One checks that a slow old response never replaces a
+    newer one. The other checks stored selections with the wrong shape. Each
+    fails if the protection is removed. The flaky F8 test now waits on what's on
+    screen. The builder never reproduced that flake, so we don't know for sure
+    it's fixed.
+
+  After you merge 8a, change 8b's base to main before merging it:
+
+  gh pr edit task/8b-frontend-pickers --base main
+
+  You can also change the base in the GitHub UI.
+
+  Agent issues from this round. I've logged three rule proposals in memory and
+  in ai-log/notes.md, but haven't applied them:
+  - Ask before adding libraries: the builder added five packages without asking
+    first, even though the rule says it must stop and ask.
+  - No leftover background timers: the builder left timers running after it
+    finished, which caused the flood of empty notifications. The Task 7 builder
+    did the same.
+  - Re-measure after each fix: test and line counts in the PR descriptions went
+    stale after fixes, in this task and in Task 1.
+
+  I can apply them on a small branch like task/0c-agents, the same way we did
+  with #4.
+
+  Once you've merged both PRs and pulled main, tell me whether to apply those
+  rules first or go straight to Task 9: the verdict card, the daily chart and
+  the data notes.
+
+✻ Baked for 1h 5m 39s · done 1:47 PM
+
+❯ merged,  continue with task 9                                                 
+
+● Bash(git checkout -q main 2>&1; git branch --show-current && git status
+      --short && git log --oneline -4 && ls frontend/src/components && sed -i
+      's/(stacked PRs 8a\/8…)
+  ⎿  main
+      D frontend/src/api/client.ts
+      D frontend/src/api/schema.d.ts
+     … +13 lines (ctrl+o to expand)
+  ⎿  Updated ai-log/notes.md (+1 -1)
+  ⎿  (a git step in this command can move the working tree, so these may be
+     its changes, not edits) (ctrl+o to expand)
+
+● The working tree shows three tracked files deleted on main:
+  frontend/src/api/*. Before going further I'll find out why, and I won't touch
+  anything yet.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● The tree is clean again with main at cc295db and both 8a and 8b merged, after
+  an earlier transient state from the host's git pull. I'm adding the three
+  parked rules to the prompt by hand before starting Task 9.
+
+● frontend-builder(Implement PLAN.md Task 9)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● frontend-builder is working on Task 9, on the branch
+  task/9-verdict-chart-notes from main at cc295db.
+
+  When I first checked main after your merge, git showed three frontend/src/api
+  files as deleted. Your git pull was still writing at that moment. When I
+  checked again, the files were back and the tree was clean, so nothing was
+  lost.
+
+  What Task 9 builds
+  - StatusBadge, plus VerdictCard. The card shows the line 21 events · usual ~20
+    (range 9–31) · +5%, the "vs. previous N weeks" text, the not-enough-history
+    message and the low-volume warning.
+  - DailyChart, a bar for each day's total with a dot for the usual value.
+  - DataNotes, wired into App.tsx in place of the plain-text placeholder.
+  - Tests for F1 (card and chart part), F2, F3, F5 (account part) and F6.
+
+  Points I flagged to the builder
+  - Null values must show as —, never ~null.
+  - Recharts draws nothing at jsdom's 0×0 size, so the chart test must check
+    real elements: the 7 day labels and the 7 bars, not an SVG snapshot.
+  - The chart needs an accessible name.
+
+  The three parked agent rules, which I added to this prompt by hand:
+  - Ask before adding any library.
+  - Leave no background timers or dev server running.
+  - Re-measure the test and line counts in the PR body after the last commit.
+
+  They're still not in the agent files. Tell me whenever you want them committed
+  there.
+
+  When the builder finishes, I'll run frontend-reviewer on the branch and give
+  you the verdict.
+
+✻ Churned for 41s · done 2:00 PM
+
+● Agent "Implement PLAN.md Task 9" finished · 11m 28s
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● frontend-reviewer(Review PLAN.md Task 9 branch)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+  ⎿  Message queued for delivery to a5613beaa73fabb78 at its next tool 
+     round. Sending this moved nothing it is running to the background just
+     now, so the message waits for that round unless something moves 
+     sooner. If it finishes first, it is resumed with the message and 
+     notifies again, so wait for that notification before resending.
+
+● The builder has finished Task 9, and frontend-reviewer is now checking it.
+
+  What the builder delivered: two local commits on task/9-verdict-chart-notes,
+  totalling 404 lines. I checked the branch: it's clean and nothing is left
+  running.
+  - Checks: lint is clean, all 35 tests pass (9 of them new), and the build
+    works.
+  - Tests: F1, F2, F3 (S3a and S3b), F5 and F6 run through <App />. Mutation
+    checks caught a weak spot: swapping which value the bars draw passed until
+    the builder added a bar-height check.
+  - Background work: one mutation run hit the 120-second tool limit and was
+    moved to the background. The builder stopped it, put the file back by hand
+    and checked the tree. The new rule worked here.
+
+  Decisions I've asked the reviewer to check:
+  1. Pluralisation: "events" is never singular, so a 1-event week reads "1
+     events". I'd fix it to "1 event", a one-line change.
+  2. Test timeout: the global test timeout was raised to 20 seconds, because the
+     first test in each file timed out under load. This could hide a missing
+     await or a real timer, so I asked the reviewer to find out why the first
+     test is slow before we accept it.
+  3. Zero bars in F1: Recharts draws no rectangle for a zero bar. So F1 checks
+     the 7 day labels and 7 hidden "0 events" entries instead of 7 bars.
+  4. Test chart size: the chart gets a 640×240 starting size so it renders in
+     tests. The reviewer will check that it still resizes in a real browser.
+  5. Not enough history: the card shows only "N events" plus the message.
+  6. Older test: an F2/F8 test in App.test.tsx was loosened to match the new
+     summary line.
+
+  My mistake: in the reviewer prompt I wrote that account 6 should show +333%.
+  The right figure is +1233%, since (880−66)/66 ≈ 12.33, and I've sent the
+  correction. I'll log it in ai-log/notes.md alongside the other times the AI
+  was wrong.
+
+  I'll pass on the verdict when the review is done.
+
+✻ Churned for 36s · done 2:12 PM
+
+● Agent "Review PLAN.md Task 9 branch" finished · 9m 4s
+  ⎿  Resuming agent a2ecc95
+
+● Bash(cat >> ai-log/notes.md <<'EOF'…)
+  ⎿  Updated ai-log/notes.md (+9 -0)
+      64  
+      65    All were fixed, and 8b was rebased onto 8a.
+      66  - **Agent noise:** after finishing, the builder sent about 15 l
+          eftover "timer finished" notifications.
+      67 +                                                               
+      68 +## Task 9: verdict card, daily chart, data notes (PR pending)  
+      69 +- **Parked rules worked when pasted into the prompt:** the buil
+         +der's mutation run hit the 120 s tool limit and went to the bac
+         +kground. The builder stopped it, restored the file, and verifie
+         +d the tree. It also re-measured the PR numbers after its last c
+         +ommit, and added no libraries.                                 
+      70 +- **AI wrong (orchestrator):** the reviewer prompt said account
+         + 6, week 2026-06-01 should show "+333%". The correct figure is 
+         +(880−66)/66 = +1233%. The orchestrator sent a correction, and t
+         +he reviewer used the API value.                                
+      71 +- **Caught by review (should-fix):**                           
+      72 +  - "1 events": the builder chose not to pluralise, and the rev
+         +iewer and orchestrator recommended fixing it.                  
+      73 +  - The `Line` `dataKey` usual→total mutant survived all tests.
+      74 +- **The builder's mutation check found its own gap:** the Bar d
+         +ataKey mutant passed until it added a bar-height assertion.    
+      75 +- **Accepted:** a global `testTimeout` of 20 s. The reviewer me
+         +asured cold imports of 4–6 s for the first test of each file an
+         +d found no missing `await` or real timers.                     
+
+● The reviewer approved Task 9 with no blocking findings. The builder is now
+  fixing the two should-fix items on the same branch.
+
+  What passed review:
+  - Checks: lint is clean, all 35 tests pass, the build succeeds and the diff is
+    404 lines.
+  - Mutations: 7 of the 8 code changes the reviewer tried made a test fail.
+  - Builder decisions: the reviewer accepted all of them.
+    - Chart size: the chart still sizes itself to its container in a real
+      browser. The 640×240 starting size only matters in tests.
+    - Zero bars in F1: checking the labels and the hidden summary is a fair
+      reading of "7 zero bars".
+    - 20-second test timeout: justified. The first test in each file takes 4–6 s
+      just to import the code, and the reviewer found no missing await or real
+      timer behind it.
+  - Live check: the API returns 880 against a usual of 66 for account 6 in week
+    2026-06-01. The card would read 880 events · usual ~66 (range 27–105) · 
+    +1233%. The reviewer worked that out from the API values and the formatter,
+    not in a browser. Account 20 shows "not enough history", and CORS works for
+    port 5173.
+
+  Being fixed now:
+  1. Singular "event": a 1-event week will read 1 event, on the card and in the
+     chart's hidden day list, and tests will cover it.
+  2. Usual dots untested: if the chart's usual dots were plotted from total
+     instead of usual, every test would still pass. The builder is adding a test
+     that ties the dots to usual.
+
+  The builder will also rename the F1 test so its name matches what it checks.
+
+  Once the fixes are in, I'll check them and give you the command to open the
+  PR. Task 9 is now recorded in ai-log/notes.md, including my +333% mistake.
+
+✻ Crunched for 22s · done 2:21 PM
+
+● Agent "Implement PLAN.md Task 9" finished · 2m 16s
+
+● Bash(git status --short && git log --oneline main..HEAD && cd frontend && bash
+      -l -c "npm run lint --silent && npm test --silent -- --run 2>&1 | grep -E
+      'Tests |Test…)
+  ⎿  ?? ai-log/notes.md
+     0502170 test(web): tie the usual dots to usual, rename the F1 test
+     11fe508 fix(web): say '1 event' for a single event
+     … +5 lines (ctrl+o to expand)
+  ⎿  Updated ai-log/notes.md (+1 -1)
+      65    All were fixed, and 8b was rebased onto 8a.
+      66  - **Agent noise:** after finishing, the builder sent about 15 l
+          eftover "timer finished" notifications.
+      67  
+      68 -## Task 9: verdict card, daily chart, data notes (PR pending)  
+      68 +## Task 9: verdict card, daily chart, data notes (PR #12, pendi
+         +ng)                                                            
+      69  - **Parked rules worked when pasted into the prompt:** the buil
+          der's mutation run hit the 120 s tool limit and went to the bac
+          kground. The builder stopped it, restored the file, and verifie
+          d the tree. It also re-measured the PR numbers after its last c
+          ommit, and added no libraries.
+      70  - **AI wrong (orchestrator):** the reviewer prompt said account
+           6, week 2026-06-01 should show "+333%". The correct figure is 
+          (880−66)/66 = +1233%. The orchestrator sent a correction, and t
+          he reviewer used the API value.
+      71  - **Caught by review (should-fix):**
+  ⎿  (timeout 5m)
+
+● Bash(sed -i 's/(PR #12, pending)$/(PR pending)/' ai-log/notes.md && grep -n
+      "^## Task 9" ai-log/notes.md)
+  ⎿  68:## Task 9: verdict card, daily chart, data notes (PR pending)
+  ⎿  Updated ai-log/notes.md (+1 -1)
+      65    All were fixed, and 8b was rebased onto 8a.
+      66  - **Agent noise:** after finishing, the builder sent about 15 l
+          eftover "timer finished" notifications.
+      67  
+      68 -## Task 9: verdict card, daily chart, data notes (PR #12, pendi
+         -ng)                                                            
+      68 +## Task 9: verdict card, daily chart, data notes (PR pending)  
+      69  - **Parked rules worked when pasted into the prompt:** the buil
+          der's mutation run hit the 120 s tool limit and went to the bac
+          kground. The builder stopped it, restored the file, and verifie
+          d the tree. It also re-measured the PR numbers after its last c
+          ommit, and added no libraries.
+      70  - **AI wrong (orchestrator):** the reviewer prompt said account
+           6, week 2026-06-01 should show "+333%". The correct figure is 
+          (880−66)/66 = +1233%. The orchestrator sent a correction, and t
+          he reviewer used the API value.
+      71  - **Caught by review (should-fix):**
+
+● Task 9 is ready for you to open the PR. On the host, run:
+
+  .pr/9/create-pr.sh
+
+  The branch task/9-verdict-chart-notes has four local commits:
+  - 1aa9fb6: StatusBadge, VerdictCard, DailyChart and DataNotes, wired into
+    App.tsx. The reviewer approved this.
+  - 423b6d3: the 20-second test timeout. The reviewer accepted it because
+    importing the code is slow on the first run, not because a test is hiding a
+    problem.
+  - 11fe508: totals now read 1 event / N events, on the card and in the chart's
+    hidden day list.
+  - 0502170: a test that ties the chart's usual dots to the usual value, plus
+    the F1 test's new name.
+
+  I re-ran the checks myself. Lint is clean and all 37 tests pass. The PR is 440
+  changed lines. Nothing is left running in the background. I added a follow-up
+  note to .pr/9/review.md.
+
+  After you merge it, Task 10 is the ranked locations table, the "which location
+  needs attention" half of the dashboard. That task covers F4, F5 (row part),
+  F7, F10 and the empty-table part of F1. Once you've merged and pulled, tell me
+  to continue.
+
+✻ Cogitated for 25m 38s · done 2:25 PM
+
+❯ merged, continue with task 10                                                 
+
+● Bash(git branch --show-current && git status --short && git log --oneline -1
+      && sed -i 's/^## Task 9: verdict card, daily chart, data notes (PR
+      pending)/## Task 9: v…)
+  ⎿  main
+     ?? ai-log/notes.md
+     c66a9f0 Merge pull request #13 from gonzalezmauricioalan-folderit/task
+     … +8 lines (ctrl+o to expand)
+  ⎿  Updated ai-log/notes.md (+1 -1)
+      65    All were fixed, and 8b was rebased onto 8a.
+      66  - **Agent noise:** after finishing, the builder sent about 15 l
+          eftover "timer finished" notifications.
+      67  
+      68 -## Task 9: verdict card, daily chart, data notes (PR pending)  
+      68 +## Task 9: verdict card, daily chart, data notes (merged)      
+      69  - **Parked rules worked when pasted into the prompt:** the buil
+          der's mutation run hit the 120 s tool limit and went to the bac
+          kground. The builder stopped it, restored the file, and verifie
+          d the tree. It also re-measured the PR numbers after its last c
+          ommit, and added no libraries.
+      70  - **AI wrong (orchestrator):** the reviewer prompt said account
+           6, week 2026-06-01 should show "+333%". The correct figure is 
+          (880−66)/66 = +1233%. The orchestrator sent a correction, and t
+          he reviewer used the API value.
+      71  - **Caught by review (should-fix):**
+
+● frontend-builder(Implement PLAN.md Task 10)  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● frontend-builder is now working on Task 10, on the branch
+  task/10-locations-table from main at c66a9f0, the merge of PR #13.
+
+  What it builds:
+  - LocationsTable: the columns Location · This week · Usual (~X) · vs usual
+    (with the U+2212 minus) · Status. Rows can carry the Low volume tag with its
+    tooltip, and missing values show as —.
+  - Empty state: No locations with activity yet.
+  - Header: Locations ({n}) with "needs attention first".
+  - Placement: the table goes in App.tsx, under the card and the chart.
+
+  Tests:
+  - F4: S4's order East, South, North, West, with the account still ● Normal.
+  - The rest: F5 for rows, F7 for a single location, F10 for a location without
+    enough history showing —, and F1 for the empty table.
+  - One extra test: the rows come from a fixture in an order that is neither
+    alphabetical nor sorted by pct, and must render in exactly that order. That
+    proves the client never re-sorts what the API sends.
+
+  The table must also be a real <table> with column headers and an accessible
+  name.
+
+  The three parked rules are in the prompt again: ask before adding libraries,
+  leave nothing running, and re-measure the counts after the last commit.
+
+  When the builder finishes, I'll run the reviewer and give you the verdict.
+
+✻ Churned for 27s · done 2:35 PM
+
+● Agent "Implement PLAN.md Task 10" finished · 4m 27s
+
+● frontend-reviewer(Review PLAN.md Task 10 branch)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● The builder has finished Task 10, and frontend-reviewer is checking it now.
+
+  Builder's result: one local commit on task/10-locations-table, 271 lines.
+  - Checks: lint is clean, all 45 tests pass (8 new), and the build works.
+    Nothing is left running.
+  - Tests: F4, F5 for rows (with and without the tag), F7, F10, the empty table
+    from F1, a table accessibility check, and the test that the rows keep the
+    API's order.
+  - Mutation check: sorting the rows, replacing the —, inverting the low-volume
+    condition and removing scope="col" each made a test fail.
+
+  Builder decisions the reviewer is checking against the wireframe:
+  - Empty state: it replaces the table, and the header still reads Locations 
+    (0).
+  - Low volume tag: it sits in the location-name cell.
+  - Table name: it comes from a hidden caption, "Locations, needs attention
+    first".
+
+  I also asked the reviewer to:
+  - try at least one mutation the builder didn't, such as dropping the ~ or
+    showing total in the Usual column;
+  - check the live API for account 6 (15 locations, all higher), account 8 (one
+    location) and account 20 (empty), and compare each against what the table
+    would show.
+
+  I'll give you the verdict when it's done.
+
+✻ Churned for 15s · done 2:39 PM
+
+● Agent "Review PLAN.md Task 10 branch" finished · 4m 42s
+
+● The reviewer approved Task 10 with two should-fix test gaps. The nit is worth
+  acting on too: the table and the card should round usual with the same helper,
+  so one location can't read differently in the two places. I'm sending all
+  three to the builder.
+  ⎿  Resuming agent a3d0408
+
+● The reviewer approved Task 10 with no blocking findings. I've sent the builder
+  back to close two test gaps and make one consistency fix.
+
+  What passed review:
+  - Spec and wireframe: the columns, ~X, the U+2212 minus, — for missing values,
+    the Low volume tooltip, the empty-state text, the header and the API order
+    all match. The reviewer also accepted all three builder decisions: the empty
+    state replaces the table, the tag sits in the location cell, and the table
+    is named by a hidden caption.
+  - Live API: account 6 gives 15 rows, all "higher". Account 8 gives one row
+    (~10, −30%). Account 20 gives Locations (0) plus the empty message.
+  - Mutations caught: dropping the ~, showing total in the Usual column,
+    shortening the tooltip, and inverting the empty-state condition each made a
+    test fail.
+
+  Gaps the builder is fixing now:
+  1. Visible header untested: the "needs attention first" check also matches the
+     hidden caption. So shortening the header you actually see would still pass
+     every test.
+  2. Rounding untested: every test fixture has a whole-number usual, so showing
+     4.5 instead of ~5 would go unnoticed. Real data has values like 4.5 and
+     3.5, for example in account 6.
+  3. Rounding helper: the table and the verdict card round with two different
+     functions. They'll share the one helper in format.ts, so 4.5 reads ~5 in
+     both places.
+
+  I'll check the fixes when the builder reports back, then give you the command
+  to open the PR.
+
+✻ Crunched for 16s · done 2:44 PM
+
+● Agent "Implement PLAN.md Task 10" finished · 2m 16s
+
+● Bash(git status --short && git log --oneline main..HEAD && git diff --stat
+      HEAD~1 HEAD && cd frontend && bash -l -c "npm run lint --silent && npm
+      test --silent -- --…)
+  ⎿  ?? ai-log/notes.md
+     61d1830 test(web): scope header assertion, cover rounding, share forma
+     tNumber
+     … +9 lines (ctrl+o to expand)
+  ⎿  Updated ai-log/notes.md (+7 -0)
+      73    - The `Line` `dataKey` usual→total mutant survived all tests.
+      74  - **The builder's mutation check found its own gap:** the Bar d
+          ataKey mutant passed until it added a bar-height assertion.
+      75  - **Accepted:** a global `testTimeout` of 20 s. The reviewer me
+          asured cold imports of 4–6 s for the first test of each file an
+          d found no missing `await` or real timers.
+      76 +                                                               
+      77 +## Task 10: ranked locations table (PR pending)                
+      78 +- **Approved; review caught 2 test gaps:**                     
+      79 +  - The visible header text was "tested" by an assertion that t
+         +he hidden caption also satisfied.                              
+      80 +  - Every fixture usual was an integer, so unrounded output pas
+         +sed. Real data (account 6) has 4.5 and 3.5.                    
+      81 +- **Consistency fix from a reviewer nit:** the table used `Math
+         +.round` and the card used `formatNumber`. They now share one he
+         +lper, so a location reads the same in both places.             
+      82 +- **Live parity:** account 6 has 15 rows, all higher. Account 8
+         + has one row (~10, −30%). Account 20 shows `Locations (0)` plus
+         + the empty copy.                                               
+  ⎿  (timeout 5m)
+
+● Task 10 is ready for you to open the PR. On the host, run:
+
+  .pr/10/create-pr.sh
+
+  The branch task/10-locations-table has two local commits:
+  - 27a6caa: LocationsTable, placed in App.tsx under the card and chart. The
+    reviewer approved this one.
+  - 61d1830: the fixes from the review.
+    - The header test now checks the visible header text, so the hidden caption
+      can't satisfy it.
+    - A new fixture has fractional usual values (4.5 shows as ~5, 3.4 as ~3).
+    - The table now uses the same formatNumber helper as the verdict card.
+    - It touches 4 files, +28/−3.
+
+  I re-ran the checks myself: lint is clean, all 46 tests pass and the build
+  succeeds. The PR is 296 lines. I've added a follow-up note to .pr/10/review.md
+  and logged Task 10 in ai-log/notes.md.
+
+  After you merge this PR, the full dashboard is built: pickers, verdict card,
+  daily chart, data notes and the ranked table. Next is Task 11, the frontend
+  scenario pass. It adds one end-to-end test per F id (F1–F13) in
+  scenarios.test.tsx, plus a manual check against the real API:
+  - account 6, week 2026-06-01 (higher);
+  - account 20 (not enough history);
+  - account 18 (the UTC note);
+  - account 8 (a single location);
+  - a reload that should keep the selection.
+
+  Once you've merged and pulled, tell me and I'll start it.
+
+✻ Churned for 13m 31s · done 2:48 PM
+
+❯ merged, continue with task 12 Let's skip task 12 because we will run out of   
+  time so we need to skip that and we need to put a clarification on the        
+  document that the reviewers will see.                                         
+
+● User answered Claude's questions:
+  ⎿  · Your message says both "continue with task 12" and "skip task 12". Which 
+     task should I skip? Task 11 is the frontend scenario pass: one end-to-end 
+     test per F1–F13, plus a manual check against the real API. Task 12 is the 
+     web container: `docker compose up` serving the dashboard on :8080, plus the
+     README "Run it" section. → Skip 11, do 12 (Recommended)
+     · Where should the skip be recorded for the reviewers? → PLAN_CHANGES.md + 
+     README (Recommended)
+
+● I'll skip Task 11 and start Task 12. The skip gets a PLAN_CHANGES.md entry on
+  the Task 12 branch, so it reaches reviewers in the same PR, and the README
+  will summarize it in Task 13.
+
+● Bash(git branch --show-current && git status --short && git log --oneline -1
+      && sed -i 's/^## Task 10: ranked locations table (PR pending)/## Task 10:
+      ranked locatio…)
+  ⎿  main
+     ?? ai-log/notes.md
+     cd1db6d Merge pull request #14 from gonzalezmauricioalan-folderit/task
+     … +30 lines (ctrl+o to expand)
+  ⎿  Updated ai-log/notes.md (+1 -1)
+      74  - **The builder's mutation check found its own gap:** the Bar d
+          ataKey mutant passed until it added a bar-height assertion.
+      75  - **Accepted:** a global `testTimeout` of 20 s. The reviewer me
+          asured cold imports of 4–6 s for the first test of each file an
+          d found no missing `await` or real timers.
+      76  
+      77 -## Task 10: ranked locations table (PR pending)                
+      77 +## Task 10: ranked locations table (merged)                    
+      78  - **Approved; review caught 2 test gaps:**
+      79    - The visible header text was "tested" by an assertion that t
+          he hidden caption also satisfied.
+      80    - Every fixture usual was an integer, so unrounded output pas
+          sed. Real data (account 6) has 4.5 and 3.5.
+
+● frontend-builder(Implement PLAN.md Task 12)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● Bash(cat >> ai-log/notes.md <<'EOF'…)
+  ⎿  Updated ai-log/notes.md (+5 -0)
+      80    - Every fixture usual was an integer, so unrounded output pas
+          sed. Real data (account 6) has 4.5 and 3.5.
+      81  - **Consistency fix from a reviewer nit:** the table used `Math
+          .round` and the card used `formatNumber`. They now share one he
+          lper, so a location reads the same in both places.
+      82  - **Live parity:** account 6 has 15 rows, all higher. Account 8
+           has one row (~10, −30%). Account 20 shows `Locations (0)` plus
+           the empty copy.
+      83 +                                                               
+      84 +## Task 11: skipped (human decision)                           
+      85 +- **Skipped for time.** The human chose to skip Task 11 (the co
+         +nsolidated F1–F13 scenario pass and the manual browser check) a
+         +nd keep Task 12 (one-command `docker compose up`), because the 
+         +one-command run matters more to reviewers.                     
+      86 +- The human's message read "continue with task 12 … skip task 1
+         +2". The orchestrator asked which task was meant instead of gues
+         +sing.                                                          
+      87 +- **Recorded for reviewers:** `PLAN_CHANGES.md` entry 3 maps ea
+         +ch F id to the Task 8–10 tests that still cover it, and says wh
+         +at was lost. The README's "Changes from the plan" section (Task
+         + 13) summarizes it.                                            
+
+● Task 11 is skipped and Task 12 is in progress. frontend-builder is on the
+  branch task/12-web-container, from main at cd1db6d (the merge of PR #14).
+
+  What Task 12 builds
+  - frontend/Dockerfile: a Node 22 build stage and an nginx serve stage, both on
+    exact pinned tags. The API URL http://localhost:8000 is built into the
+    bundle.
+  - nginx config: any deep link falls back to index.html, so it loads the app.
+    Built assets are cached long-term, and index.html is never cached.
+  - Compose service web on port 8080: it waits for the API's healthcheck before
+    starting. docker compose up -d --build --wait then brings up the whole
+    dashboard.
+  - A short root README.md "Run it" section: the command, the URLs, the reset
+    command and the prerequisites. Task 13 extends it into the full README.
+
+  How the skip is recorded for reviewers
+  - In PLAN_CHANGES.md: new entry 3 says that you skipped Task 11 for time.
+  - What still covers each scenario: the entry maps every F1–F13 id to the
+    existing Task 8–10 test that covers it.
+  - What was lost: the single end-to-end test per scenario, and a manual check
+    in a browser. The reviewers of Tasks 9 and 10 only checked the live API with
+    curl.
+  - Gaps: if the builder finds an F id that no test covers, it will say so in
+    the entry rather than hide it.
+  - README: the "Changes from the plan" section in Task 13 will summarize this
+    entry.
+
+  I also recorded the skip and your reasoning in ai-log/notes.md.
+
+  When the builder finishes, I'll have the reviewer check the containers, the
+  SPA fallback, the built-in API URL and the accuracy of entry 3, then give you
+  the verdict.
+
+✻ Churned for 53s · done 2:55 PM
+
+● Agent "Implement PLAN.md Task 12" is waiting on its own background work · 12m 
+33s
+
+● frontend-reviewer(Review PLAN.md Task 12 branch)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● The builder has finished Task 12, and frontend-reviewer is now checking it.
+
+  What the builder did: one local commit on task/12-web-container, 135 lines.
+  The full stack (db, api, web) is running, seeded and healthy.
+  - Quickstart: a wipe and docker compose up -d --build --wait brings everything
+    up in 33 seconds with a warm cache. localhost:8080 returns 200, and lint,
+    the tests (46) and the build still pass.
+  - Extra checks:
+    - deep links serve index.html;
+    - the bundle contains http://localhost:8000;
+    - built assets are cached for a year, while index.html isn't cached;
+    - up -d --wait db still starts only the db.
+  - Images: node:22.23.4-alpine and nginx:1.27.5-alpine, both taken from the
+    images the builder actually pulled.
+  - A bug it caught: the web healthcheck failed at first. localhost resolves to
+    IPv6 inside the container, but nginx only listens on IPv4, so the check now
+    uses 127.0.0.1.
+  - PLAN_CHANGES.md entry 3: it records that you skipped Task 11. Every F1–F13
+    scenario has a covering test, and the entry maps each one. It also states
+    what was lost: the single full-screen test per scenario, and a manual
+    browser check.
+
+  A decision for you: the web port is fixed at 8080, because the API's CORS
+  setting only allows localhost:8080. Making it configurable would also mean
+  changing the API's CORS setting. I think fixed is fine for a reviewer setup.
+
+  What the reviewer will check:
+  - that it can follow the README "Run it" section word for word from a wipe,
+    timing it;
+  - that a missing asset returns 404 rather than index.html;
+  - what the dashboard does when the API is stopped;
+  - that each F mapping in entry 3 points to a test that really checks what
+    section 4 says.
+
+  None of the agents has opened the dashboard in a real browser yet, so that
+  part is yours.
+
+✻ Crunched for 48s · done 3:09 PM
+
+● Agent "Implement PLAN.md Task 12" is waiting on its own background work · 16m 
+37s
+
+● That message was a leftover watcher from the builder timing out, with no new
+  information. The stack is still up, and the reviewer is still checking Task
+  12.
+
+✻ Worked for 4s · done 3:12 PM
+
+● Agent "Implement PLAN.md Task 12" is waiting on its own background work · 17m 
+42s
+● That was another leftover watcher from the builder, with no new information.
+  The reviewer is still checking Task 12.
+
+✻ Crunched for 3s · done 3:13 PM
+
+● Agent "Review PLAN.md Task 12 branch" finished · 5m 41s
+
+● Bash(git status --short && git log --oneline main..task/12-web-container &&
+      cat >> .pr/12/review.md <<'EOF'…)
+  ⎿  ?? ai-log/notes.md
+     52c496f feat(web): nginx container and one-command run
+  ⎿  Updated ai-log/notes.md (+10 -0)
+      85  - **Skipped for time.** The human chose to skip Task 11 (the co
+          nsolidated F1–F13 scenario pass and the manual browser check) a
+          nd keep Task 12 (one-command `docker compose up`), because the 
+          one-command run matters more to reviewers.
+      86  - The human's message read "continue with task 12 … skip task 1
+          2". The orchestrator asked which task was meant instead of gues
+          sing.
+      87  - **Recorded for reviewers:** `PLAN_CHANGES.md` entry 3 maps ea
+          ch F id to the Task 8–10 tests that still cover it, and says wh
+          at was lost. The README's "Changes from the plan" section (Task
+           13) summarizes it.
+      88 +                                                               
+      89 +## Task 12: web container + one-command run (PR pending)       
+      90 +- **Approved with nits only.** The reviewer:                   
+      91 +  - followed the README "Run it" section from `down -v`, and th
+         +e stack came up in 34 s on a warm cache;                       
+      92 +  - confirmed the bundle contains the API URL, the final image 
+         +has only `dist` plus the config, cache headers are set, and a m
+         +issing `/assets/*` returns 404;                                
+      93 +  - with the api stopped, found the static app still served.   
+      94 +- **Builder caught a real bug:** the web healthcheck with `loca
+         +lhost` failed. Inside the alpine container `localhost` resolved
+         + to `::1`, but nginx listens on IPv4 only. The check uses `127.
+         +0.0.1` now, and the reviewer confirmed the cause.              
+      95 +- **Deferred to Task 13:** documenting `API_PORT` and the fixed
+         + 8080 web port (from the CORS default) in the README.          
+      96 +- **Still open:** no agent ever opened the dashboard in a real 
+         +browser. That's left to the human.                             
+      97 +- **Recurring:** the builder left watchers running that sent 2 
+         +empty notifications after finishing, even though the rule was p
+         +asted into its prompt.                                         
+
+● Task 12 is ready for you to open the PR. The reviewer approved it with only
+  two nits. On the host, run:
+
+  .pr/12/create-pr.sh
+
+  What the reviewer checked:
+  - README run: it followed the README "Run it" section word for word, starting
+    from down -v. With a warm cache, db, api and web came up healthy in 34
+    seconds. :8080 returned 200, /accounts returned 20 accounts, and the CORS
+    header allows :8080.
+  - Images:
+    - Both exact tags exist on the registry.
+    - The final nginx image contains only the built dist files and the config.
+    - The bundle contains http://localhost:8000.
+  - nginx: deep links fall back to index.html (no-cache). Built assets are
+    cached for a year. A missing /assets/nope.js returns 404 instead of the
+    page.
+  - Healthcheck: the IPv6 cause the builder found is confirmed, and the
+    127.0.0.1 fix works.
+  - API stopped: the dashboard is still served, and only the data calls would
+    fail.
+  - Skip record: PLAN_CHANGES.md entry 3 maps every F1–F13 scenario to a real
+    test that checks what section 4 says. Its "what is lost" part is honest, and
+    entries 1 and 2 are unchanged.
+
+  The two nits:
+  - API_PORT, and the reason the web port has to stay 8080 (the CORS default),
+    are only explained in a compose comment. The Task 13 README will cover both.
+  - Any non-asset path falls back to index.html, which is normal for a
+    single-page app.
+
+  One thing only you can do: no agent has opened the dashboard in a real
+  browser. The stack is running now, so before you merge you can look at
+  http://localhost:8080 on the host:
+  - account 6, week Jun 1 (▲ higher, +1233%);
+  - account 20 (not enough history);
+  - account 18 (UTC note);
+  - account 8 (one location);
+  - a reload, which should keep your selection.
+
+  You'll need to publish the ports first:
+
+  sbx ports $SANDBOX_NAME --publish 8080:8080/tcp --publish 8000:8000/tcp
+
+  The browser calls localhost:8000 from your machine, so 8000 has to be
+  published too.
+
+  After that merge, the build tasks are done. Task 13 is the README, and PLAN.md
+  has you and me write it rather than an agent. Tell me when you're ready, and
+  I'll draft it from PLAN.md, PLAN_CHANGES.md, Data_integrity.md,
+  Detection_tuning.md and OPEN_QUESTIONS.md.
+
+✻ Cogitated for 21m 49s · done 3:14 PM
