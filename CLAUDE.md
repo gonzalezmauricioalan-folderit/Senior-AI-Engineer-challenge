@@ -42,6 +42,16 @@ curl -s localhost:8000/health
 backend/.venv/bin/python scripts/export_openapi.py     # regenerate openapi.json (the committed contract; a test fails if stale)
 ```
 
+## Frontend commands (run from `frontend/`, Node 22 via `.nvmrc`)
+
+```bash
+npm ci                                  # install from the lockfile
+npm run gen:api                         # regenerate src/api/schema.d.ts from ../openapi.json (commit the result)
+npm run dev                             # Vite dev server on :5173 (API at VITE_API_URL, default http://localhost:8000)
+npm run lint && npm test -- --run && npm run build   # lint, tests (Vitest + MSW, no live API), type-check + build
+npm test -- --run src/App.test.tsx -t "F12"          # a single test
+```
+
 ## Local database
 
 ```bash
