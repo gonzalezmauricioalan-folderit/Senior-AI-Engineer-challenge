@@ -1,12 +1,13 @@
+import datetime as dt
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import Connection
 
 from app import repository, service
 from app.db import get_connection
-from app.schemas import AccountSummary, Health
+from app.schemas import AccountSummary, Health, WeeklyInsight
 
 router = APIRouter()
 
@@ -27,3 +28,13 @@ def health(request: Request) -> JSONResponse:
 @router.get("/accounts", response_model=list[AccountSummary])
 def accounts(request: Request, conn: Conn) -> list[AccountSummary]:
     return service.list_accounts(conn, request.app.state.settings)
+
+
+@router.get("/accounts/{account_id}/weekly-insight", response_model=WeeklyInsight)
+def weekly_insight(
+    account_id: int, request: Request, conn: Conn, week_start: dt.date | None = None
+) -> WeeklyInsight:
+    try:
+        return service.build_weekly_insight(conn, request.app.state.settings, account_id, week_start)
+    except service.ServiceError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail) from e
