@@ -34,17 +34,25 @@ uv pip install --python .venv/bin/python -r requirements-dev.txt
 .venv/bin/pytest -q tests/integration/test_health.py::test_health_ok   # a single test
 ```
 
+## Full stack in Docker (db + api)
+
+```bash
+docker compose up -d --build --wait                    # db + api; the api container migrates and seeds itself, then serves :8000
+curl -s localhost:8000/health
+backend/.venv/bin/python scripts/export_openapi.py     # regenerate openapi.json (the committed contract; a test fails if stale)
+```
+
 ## Local database
 
 ```bash
 cp .env.example .env                                   # optional; defaults match
 uv venv backend/.venv && uv pip install --python backend/.venv/bin/python -r backend/requirements.txt
                                                        # or: python3 -m venv backend/.venv && backend/.venv/bin/pip install -r backend/requirements.txt
-docker compose up -d --wait                            # start db, wait for healthy
+docker compose up -d --wait db                        # start ONLY the db (no api container), wait for healthy
 (cd backend && .venv/bin/alembic upgrade head)         # migrate only
 ./scripts/load_seed.sh                                 # migrate + load data/seed.sql (skips if data already present)
 docker compose exec db psql -U relay -d relay          # psql shell
-docker compose down -v && docker compose up -d --wait && ./scripts/load_seed.sh   # reset
+docker compose down -v && docker compose up -d --wait db && ./scripts/load_seed.sh   # reset (db only)
 ```
 
 - URL: `postgresql+psycopg://relay:relay@localhost:5432/relay` (`DATABASE_URL`, read by `backend/migrations/env.py`).
