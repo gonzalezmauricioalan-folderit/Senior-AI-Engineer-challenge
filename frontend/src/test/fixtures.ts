@@ -171,3 +171,12 @@ export const insightUnsortedRows = {
     loc("Site A", 9, 10.0, -0.1, "normal"),
   ],
 } satisfies WeeklyInsight;
+
+// Real locations have fractional usuals (seed: 4.5, 3.5); the table must round them like the card does.
+export const insightFractionalUsual = {
+  ...insightS2,
+  locations: [
+    loc("Half", 5, 4.5, 0.11, "normal"),
+    loc("Low", 3, 3.4, -0.12, "normal"),
+  ],
+} satisfies WeeklyInsight;

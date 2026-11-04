@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import App from "./App";
 import type { WeeklyInsight } from "./api/types";
 import {
+  insightFractionalUsual,
   insightLowVolumeRow,
   insightNotEnoughRow,
   insightS1,
@@ -36,7 +37,10 @@ describe("F4 ranked table (S4)", () => {
       ["West", "35", "~20", "+75%", "▲ Higher than usual"],
     ]);
     expect(screen.getByRole("heading", { name: "Locations (4)" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Locations (4)" })).toHaveTextContent("needs attention first");
+    // Scoped to the visible header: the hidden caption also says it, so a region-wide match proves nothing.
+    const header = screen.getByRole("heading", { name: "Locations (4)" }).parentElement;
+    expect(header).not.toBeNull();
+    expect(within(header as HTMLElement).getByText("needs attention first")).toBeVisible();
     // The account itself is fine: its badge is Normal while two rows are Lower.
     expect(within(screen.getByRole("region", { name: "Verdict" })).getByText("● Normal")).toBeInTheDocument();
   });
@@ -48,6 +52,15 @@ describe("F4 ranked table (S4)", () => {
     const headers = within(table).getAllByRole("columnheader");
     expect(headers.map((h) => h.textContent)).toEqual(["Location", "This week", "Usual", "vs usual", "Status"]);
     for (const h of headers) expect(h).toHaveAttribute("scope", "col");
+  });
+});
+
+describe("usual is rounded like the verdict card", () => {
+  it("renders 4.5 as ~5 and 3.4 as ~3", async () => {
+    serve(insightFractionalUsual);
+    render(<App />);
+    const rows = await bodyRows();
+    expect(rows.map((r) => r[2])).toEqual(["~5", "~3"]);
   });
 });
 

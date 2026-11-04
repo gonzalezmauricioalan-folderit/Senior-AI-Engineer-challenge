@@ -1,5 +1,5 @@
 import type { LocationMetric } from "../api/types";
-import { formatPct } from "../format";
+import { formatNumber, formatPct } from "../format";
 import StatusBadge from "./StatusBadge";
 
 /*
@@ -45,7 +45,7 @@ export default function LocationsTable({ locations }: { locations: LocationMetri
                   )}
                 </th>
                 <td className="num">{row.total}</td>
-                <td className="num">{row.usual === null ? "—" : `~${Math.round(row.usual)}`}</td>
+                <td className="num">{row.usual === null ? "—" : `~${formatNumber(row.usual)}`}</td>
                 <td className="num">{formatPct(row.pct_vs_usual)}</td>
                 <td>
                   <StatusBadge status={row.status} />

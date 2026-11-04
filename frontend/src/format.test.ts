@@ -18,6 +18,9 @@ describe("formatPct", () => {
 describe("formatNumber", () => {
   it("rounds to an integer and handles null", () => {
     expect(formatNumber(75.6)).toBe("76");
+    expect(formatNumber(4.5)).toBe("5");
+    expect(formatNumber(3.5)).toBe("4");
+    expect(formatNumber(3.4)).toBe("3");
     expect(formatNumber(null)).toBe("—");
   });
 });
