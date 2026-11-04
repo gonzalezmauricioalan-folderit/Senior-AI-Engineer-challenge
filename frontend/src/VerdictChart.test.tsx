@@ -72,6 +72,13 @@ describe("F2 normal week", () => {
     const heights = Array.from(chart.querySelectorAll(".recharts-bar-rectangle path")).map((p) => Number(p.getAttribute("height")));
     expect(heights).toHaveLength(7);
     expect(heights[1]).toBeGreaterThan(heights[0] ?? Infinity);
+    // The dots are driven by `usual`, not `total`. Tue: total 4, usual 3 -> dot below the bar top.
+    // Sat: total 2, usual 2.5 -> dot above the bar top. (SVG y grows downwards.)
+    const barTops = Array.from(chart.querySelectorAll(".recharts-bar-rectangle path")).map((p) => Number(p.getAttribute("y")));
+    const dotYs = Array.from(chart.querySelectorAll(".recharts-line-dots circle")).map((c) => Number(c.getAttribute("cy")));
+    expect(dotYs).toHaveLength(7);
+    expect(dotYs[1]).toBeGreaterThan(barTops[1] ?? Infinity);
+    expect(dotYs[5]).toBeLessThan(barTops[5] ?? -Infinity);
     expect(screen.getByText("Wed: 3 events, usual 3")).toBeInTheDocument();
   });
 
