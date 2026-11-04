@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import AccountPicker from "./components/AccountPicker";
 import DailyChart from "./components/DailyChart";
 import DataNotes from "./components/DataNotes";
+import LocationsTable from "./components/LocationsTable";
 import StateMessage from "./components/StateMessage";
 import VerdictCard from "./components/VerdictCard";
 import WeekPicker from "./components/WeekPicker";
@@ -62,6 +63,7 @@ export default function App() {
             <>
               <VerdictCard summary={insight.data.summary} baseline={insight.data.baseline} />
               <DailyChart days={insight.data.days} />
+              <LocationsTable locations={insight.data.locations} />
               <DataNotes notes={insight.data.data_notes} />
             </>
           )}
