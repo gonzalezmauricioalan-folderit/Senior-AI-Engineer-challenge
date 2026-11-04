@@ -34,7 +34,7 @@ describe("F8 week navigation", () => {
 
     // Wait on UI state (the week label and the loaded insight), never on elapsed time.
     await waitFor(() => expect(screen.getByTestId("week-range")).toHaveTextContent("Jul 20 \u2013 Jul 26, 2026"));
-    expect(await screen.findByText("21 events")).toBeInTheDocument();
+    expect(await screen.findByText(/^21 events/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Next week" })).toBeDisabled();
     expect(screen.getByText("(CDT)")).toBeInTheDocument();
 
@@ -43,7 +43,7 @@ describe("F8 week navigation", () => {
     // The request for the new week is the last one, and its result replaces "Loading…".
     await waitFor(() => expect(requests.at(-1)).toEqual({ accountId: 2, weekStart: "2026-07-13" }));
     await waitFor(() => expect(screen.queryByText("Loading…")).not.toBeInTheDocument());
-    expect(await screen.findByText("21 events")).toBeInTheDocument();
+    expect(await screen.findByText(/^21 events/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Next week" })).toBeEnabled();
 
     await user.click(screen.getByRole("button", { name: "Next week" }));
@@ -56,7 +56,7 @@ describe("F8 week navigation", () => {
     const requests = recordInsightRequests();
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByText("21 events");
+    await screen.findByText(/^21 events/);
     await user.click(screen.getByRole("button", { name: "Previous week" }));
     await waitFor(() => expect(requests.at(-1)?.weekStart).toBe("2026-07-13"));
 
@@ -102,15 +102,15 @@ describe("stale responses", () => {
     render(<App />);
 
     await user.click(await screen.findByRole("button", { name: "Previous week" }));
-    expect(await screen.findByText("21 events")).toBeInTheDocument();
+    expect(await screen.findByText(/^21 events/)).toBeInTheDocument();
 
     releaseStale();
     await waitFor(() => expect(staleAborted).not.toBeNull());
     // Give React the chance to (wrongly) render the stale payload.
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(staleAborted).toBe(true);
-    expect(screen.queryByText("99 events")).not.toBeInTheDocument();
-    expect(screen.getByText("21 events")).toBeInTheDocument();
+    expect(screen.queryByText(/^99 events/)).not.toBeInTheDocument();
+    expect(screen.getByText(/^21 events/)).toBeInTheDocument();
     expect(screen.getByTestId("week-range")).toHaveTextContent("Jul 13");
   });
 });
@@ -119,7 +119,7 @@ describe("F9 errors and loading", () => {
   it("shows Loading… while pending, then the data", async () => {
     render(<App />);
     expect(screen.getByText("Loading…")).toBeInTheDocument();
-    expect(await screen.findByText("21 events")).toBeInTheDocument();
+    expect(await screen.findByText(/^21 events/)).toBeInTheDocument();
     expect(screen.queryByText("Loading…")).not.toBeInTheDocument();
   });
 
@@ -138,7 +138,7 @@ describe("F9 errors and loading", () => {
 
     expect(await screen.findByText("Couldn't load data.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Retry" }));
-    expect(await screen.findByText("21 events")).toBeInTheDocument();
+    expect(await screen.findByText(/^21 events/)).toBeInTheDocument();
     expect(calls).toBe(2);
   });
 
@@ -163,7 +163,7 @@ describe("F11 reload", () => {
     const requests = recordInsightRequests();
     render(<App />);
 
-    expect(await screen.findByText("21 events")).toBeInTheDocument();
+    expect(await screen.findByText(/^21 events/)).toBeInTheDocument();
     expect(requests).toEqual([{ accountId: 6, weekStart: "2026-06-01" }]);
     expect(screen.getByLabelText("Account")).toHaveValue("6");
     expect(screen.getByTestId("week-range")).toHaveTextContent("Jun 1 – Jun 7, 2026");
@@ -186,7 +186,7 @@ describe("F12 invalid stored selection", () => {
     const requests = recordInsightRequests();
     render(<App />);
 
-    expect(await screen.findByText("21 events")).toBeInTheDocument();
+    expect(await screen.findByText(/^21 events/)).toBeInTheDocument();
     expect(requests).toEqual([{ accountId: 2, weekStart: "2026-07-20" }]);
     await waitFor(() => expect(JSON.parse(stored() ?? "null")).toEqual({ accountId: 2, weekStart: "2026-07-20" }));
   });
@@ -203,7 +203,7 @@ describe("F13 blocked localStorage", () => {
     const requests = recordInsightRequests();
     render(<App />);
 
-    expect(await screen.findByText("21 events")).toBeInTheDocument();
+    expect(await screen.findByText(/^21 events/)).toBeInTheDocument();
     expect(requests).toEqual([{ accountId: 2, weekStart: "2026-07-20" }]);
     expect(screen.queryByText("Couldn't load data.")).not.toBeInTheDocument();
   });

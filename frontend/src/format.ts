@@ -67,3 +67,8 @@ export function tzAbbreviation(timeZone: string, isoDate: string): string {
   const parts = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "short" }).formatToParts(instant);
   return parts.find((part) => part.type === "timeZoneName")?.value ?? timeZone;
 }
+
+/** "1 event" / "0 events" / "2 events". */
+export function formatEvents(count: number): string {
+  return `${count} ${count === 1 ? "event" : "events"}`;
+}
